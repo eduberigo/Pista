@@ -140,8 +140,49 @@ class Deck(val index: Int) {
     }
 
     fun changeLoopBeats(b: Double) {
-        loopBeats = b.coerceIn(1.0 / 32, 64.0)
+        loopBeats = b.coerceIn(1.0 / 32, 128.0)
         if (loopOn) loopEnd = loopStart + loopBeats * periodFrames
+    }
+
+    /** Próximo tamanho de laço na escala (inclui 3, 6, 12, 24, 48 batidas). */
+    fun loopStep(dir: Int) {
+        val cur = loopBeats
+        val next = if (dir > 0) LOOP_STEPS.firstOrNull { it > cur + 1e-6 } ?: LOOP_STEPS.last()
+        else LOOP_STEPS.lastOrNull { it < cur - 1e-6 } ?: LOOP_STEPS.first()
+        changeLoopBeats(next)
+    }
+
+    /** Laço de [beats] batidas: liga a partir da batida atual, ou só muda o tamanho se já estiver ligado. */
+    fun setLoop(beats: Double) {
+        if (loaded == null) return
+        if (loopOn && abs(loopBeats - beats) < 1e-6) { loopOn = false; return }
+        changeLoopBeats(beats)
+        if (!loopOn) {
+            val s = quantized(pos)
+            loopStart = s
+            loopEnd = s + loopBeats * periodFrames
+            loopOn = true
+        }
+    }
+
+    @Volatile var loopInPending = -1.0
+
+    fun loopIn() {
+        if (loaded == null) return
+        loopInPending = quantized(pos)
+        loopOn = false
+    }
+
+    fun loopOut() {
+        val s = loopInPending
+        if (loaded == null || s < 0) return
+        val e = quantized(pos)
+        if (e <= s + 100) return
+        loopStart = s
+        loopEnd = e
+        loopBeats = (e - s) / periodFrames
+        loopOn = true
+        loopInPending = -1.0
     }
 
     fun beatJump(beats: Double) {
@@ -508,7 +549,10 @@ class Deck(val index: Int) {
         hopAdv = adv
         var nh = ideal + GH * adv
         val lo = loopOn; val le = loopEnd; val ls = loopStart
-        if (lo && le > ls && nh >= le) nh = ls + (nh - le) % (le - ls)
+        // volta ao início do laço no salto mais próximo do fim (erro máximo de meio salto, ~10 ms)
+        if (lo && le > ls && nh >= le - GH * adv * 0.5) {
+            nh = if (nh >= le) ls + (nh - le) % (le - ls) else ls - (le - nh)
+        }
         nextHop = nh
     }
 
@@ -601,6 +645,7 @@ class Deck(val index: Int) {
 
     companion object {
         const val MAXB = 1024
+        val LOOP_STEPS = doubleArrayOf(1.0 / 8, 1.0 / 4, 1.0 / 2, 1.0, 2.0, 3.0, 4.0, 6.0, 8.0, 12.0, 16.0, 24.0, 32.0, 48.0, 64.0)
         const val GN = 2048
         const val GH = 1024
     }

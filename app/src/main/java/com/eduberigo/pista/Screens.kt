@@ -362,7 +362,11 @@ private fun WaveColumn(d: Deck, modifier: Modifier) {
     }
 }
 
-fun loopLabel(b: Double): String = if (b >= 1) "${b.toInt()}" else "1/${(1 / b).toInt()}"
+fun loopLabel(b: Double): String = when {
+    b >= 1 && kotlin.math.abs(b - kotlin.math.round(b)) < 0.05 -> "${kotlin.math.round(b).toInt()}"
+    b >= 1 -> "%.1f".format(b)
+    else -> "1/${kotlin.math.round(1 / b).toInt()}"
+}
 
 @Composable
 private fun LoopBar(d: Deck) {
@@ -372,9 +376,9 @@ private fun LoopBar(d: Deck) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Pill("‹", Modifier.weight(1f)) { d.changeLoopBeats(d.loopBeats / 2) }
+        Pill("‹", Modifier.weight(1f)) { d.loopStep(-1) }
         Pill("⟳ " + loopLabel(d.loopBeats), Modifier.weight(1.6f), on = d.loopOn, color = C.green) { d.toggleLoop() }
-        Pill("›", Modifier.weight(1f)) { d.changeLoopBeats(d.loopBeats * 2) }
+        Pill("›", Modifier.weight(1f)) { d.loopStep(1) }
     }
 }
 
@@ -391,6 +395,24 @@ private fun PadsTab() {
 @Composable
 private fun ColumnScope.Section(s: String) {
     Text(s, color = C.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+}
+
+@Composable
+private fun ColumnScope.LoopPads(d: Deck) {
+    Tick.frame.longValue
+    Section("LOOP (em batidas · toque de novo para sair)")
+    for (row in listOf(listOf(1.0, 2.0, 4.0, 8.0), listOf(12.0, 16.0, 32.0, 64.0))) {
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            for (b in row) {
+                Pill(loopLabel(b), Modifier.weight(1f), on = d.loopOn && kotlin.math.abs(d.loopBeats - b) < 1e-6, color = C.green, fontSize = 11) { d.setLoop(b) }
+            }
+        }
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Pill("IN", Modifier.weight(1f), on = d.loopInPending >= 0, color = C.yellow, fontSize = 11) { d.loopIn() }
+        Pill("OUT", Modifier.weight(1f), fontSize = 11) { d.loopOut() }
+        Pill("SAIR", Modifier.weight(1f), enabled = d.loopOn, fontSize = 11) { d.loopOn = false }
+    }
 }
 
 @Composable
@@ -422,6 +444,7 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
             Pill("+1", Modifier.weight(1f), fontSize = 11) { d.beatJump(1.0) }
             Pill("+4", Modifier.weight(1f), fontSize = 11) { d.beatJump(4.0) }
         }
+        LoopPads(d)
         Section("BPM")
         Pill("TAP", Modifier.fillMaxWidth().height(52.dp), color = C.deck(d.index), fontSize = 16) { d.tap() }
         val tap = d.ui.tapInfo
