@@ -17,6 +17,8 @@ class Track(val id: String, var path: String) {
     var bpm = 0.0
     /** Tempo (s) de um downbeat ("1" do compasso). A grade é anchor + k * período. */
     var anchor = 0.0
+    /** O "1" foi marcado à mão: ao afinar o BPM, só encaixa na batida mais próxima. */
+    var anchorManual = false
     var autoCue = 0.0
     var cue = -1.0
     var key = -1
@@ -36,7 +38,7 @@ class Track(val id: String, var path: String) {
         put("title", title); put("artist", artist); put("album", album); put("genre", genre)
         put("dur", durationMs); put("size", size); put("added", addedAt)
         put("an", analyzed); put("st", stems)
-        put("bpm", fin(bpm)); put("anchor", fin(anchor)); put("acue", fin(autoCue)); put("cue", fin(cue))
+        put("bpm", fin(bpm)); put("anchor", fin(anchor)); put("am", anchorManual); put("acue", fin(autoCue)); put("cue", fin(cue))
         put("key", key); put("kst", keyFromStems); put("gain", fin(gain.toDouble()))
         put("hot", JSONArray().apply { hotcues.forEach { put(fin(it)) } })
         put("plays", plays); put("last", lastPlayed)
@@ -58,6 +60,7 @@ class Track(val id: String, var path: String) {
             stems = o.optBoolean("st")
             bpm = o.optDouble("bpm", 0.0)
             anchor = o.optDouble("anchor", 0.0)
+            anchorManual = o.optBoolean("am")
             autoCue = o.optDouble("acue", 0.0)
             cue = o.optDouble("cue", -1.0)
             key = o.optInt("key", -1)

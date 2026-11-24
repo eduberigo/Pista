@@ -48,13 +48,20 @@ object Pista {
 
 /** Passos compartilhados entre a fila de processamento e o carregamento nos decks. */
 object Work {
-    fun analyze(t: Track, pcm: java.nio.ShortBuffer, frames: Int, cancel: () -> Boolean) {
-        val a = Analyzer.analyze(pcm, frames, cancel)
+    fun analyze(t: Track, pcm: java.nio.ShortBuffer, frames: Int, cancel: () -> Boolean, hint: Double = 0.0) {
+        val a = Analyzer.analyze(pcm, frames, cancel, hint)
         val lib = Pista.library
         lib.dataDir(t).mkdirs()
         lib.waveFile(t).writeBytes(a.wave)
+        if (hint > 0 && t.anchorManual && a.bpm > 0) {
+            // mantém o "1" que você marcou, encaixado na batida mais próxima da grade nova
+            val per = 60.0 / a.bpm
+            t.anchor = a.anchor + kotlin.math.round((t.anchor - a.anchor) / per) * per
+        } else {
+            t.anchor = a.anchor
+            t.anchorManual = false
+        }
         t.bpm = a.bpm
-        t.anchor = a.anchor
         t.autoCue = a.autoCue
         if (!t.keyFromStems) t.key = a.key
         t.gain = a.gain

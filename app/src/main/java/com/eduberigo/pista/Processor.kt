@@ -136,7 +136,7 @@ object Processor {
             val pcm = Codec.map(tmp)
             if (!t.analyzed) {
                 ui("Analisando BPM e tom", title, 0f)
-                Work.analyze(t, pcm, frames) { stopFlag }
+                Work.analyze(t, pcm, frames, { stopFlag })
             }
             if (sep && !t.stems) {
                 if (!Separator.modelReady()) {

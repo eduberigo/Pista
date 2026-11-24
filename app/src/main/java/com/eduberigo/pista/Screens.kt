@@ -422,8 +422,21 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
             Pill("+1", Modifier.weight(1f), fontSize = 11) { d.beatJump(1.0) }
             Pill("+4", Modifier.weight(1f), fontSize = 11) { d.beatJump(4.0) }
         }
+        Section("BPM")
+        Pill("TAP", Modifier.fillMaxWidth().height(52.dp), color = C.deck(d.index), fontSize = 16) { d.tap() }
+        val tap = d.ui.tapInfo
+        Text(
+            tap.ifEmpty { "Bata no ritmo (4 ou mais toques). Ao parar, o app afina o BPM exato pelo áudio." },
+            color = if (tap.isEmpty()) C.dim else C.green, fontSize = 10.sp,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("÷2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(0.5) }
+            Pill("×2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(2.0) }
+            Pill("AFINAR", Modifier.weight(1.4f), fontSize = 10) { d.refineBpm() }
+        }
         Section("GRADE (downbeat = o 1)")
-        Pill("MARCAR 1 AQUI", Modifier.fillMaxWidth(), fontSize = 11) { d.downbeatHere() }
+        Pill("MARCAR 1 AQUI", Modifier.fillMaxWidth(), fontSize = 11, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
+        Text("Toque: o 1 vai para a batida mais próxima. Segure: posição exata.", color = C.dim, fontSize = 9.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Pill("1 ◀ batida", Modifier.weight(1f), fontSize = 10) { d.shiftDownbeat(-1) }
             Pill("batida ▶ 1", Modifier.weight(1f), fontSize = 10) { d.shiftDownbeat(1) }
@@ -432,10 +445,17 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
             Pill("◀ 10 ms", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(-10.0) }
             Pill("10 ms ▶", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(10.0) }
         }
+        Section("INÍCIO DA MÚSICA (onde ela carrega)")
+        Pill("INÍCIO AQUI", Modifier.fillMaxWidth(), fontSize = 11) { d.setCue() }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Pill("BPM ÷2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(0.5) }
-            Pill("BPM ×2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(2.0) }
+            Pill("NA BATERIA", Modifier.weight(1f), enabled = d.ui.stemsReady, fontSize = 10) { d.startAtDrums() }
+            Pill("AUTOMÁTICO", Modifier.weight(1f), fontSize = 10) { d.resetCue() }
         }
+        Text(
+            if (d.ui.stemsReady) "NA BATERIA pula a introdução: vai para o 1º compasso em que a bateria entra."
+            else "NA BATERIA fica disponível depois da separação das faixas.",
+            color = C.dim, fontSize = 9.sp,
+        )
     }
 }
 
@@ -565,12 +585,15 @@ private fun TempoPanel(d: Deck, onClose: () -> Unit) {
                     if (s != null) { shift = s; d.keyShift = s }
                 }
             }
-            Text("GRADE", color = C.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("BPM −0,01", Modifier.weight(1f), fontSize = 11) { d.fineBpm(-0.01) }
-                Pill("BPM +0,01", Modifier.weight(1f), fontSize = 11) { d.fineBpm(0.01) }
-                Pill("1 AQUI", Modifier.weight(1f), fontSize = 11) { d.downbeatHere() }
+            Text("BPM E GRADE", color = C.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Pill("TAP", Modifier.weight(1.4f).height(48.dp), color = C.deck(d.index), fontSize = 15) { d.tap() }
+                Pill("−0,01", Modifier.weight(1f), fontSize = 11) { d.fineBpm(-0.01) }
+                Pill("+0,01", Modifier.weight(1f), fontSize = 11) { d.fineBpm(0.01) }
+                Pill("1 AQUI", Modifier.weight(1f), fontSize = 11, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
             }
+            val tap = d.ui.tapInfo
+            if (tap.isNotEmpty()) Text(tap, color = C.green, fontSize = 12.sp)
             Pill("FECHAR", Modifier.fillMaxWidth()) { onClose() }
         }
     }

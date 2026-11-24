@@ -38,6 +38,7 @@ class DeckUi {
     var cover by mutableStateOf<Bitmap?>(null)
     var stemsReady by mutableStateOf(false)
     var muteMask by mutableIntStateOf(0)
+    var tapInfo by mutableStateOf("")
     var edits by mutableIntStateOf(0)
 }
 
@@ -149,11 +150,113 @@ class Deck(val index: Int) {
         seekBy(d)
     }
 
-    /** Grade: define o "1" do compasso na posição atual. */
-    fun downbeatHere() {
+    /**
+     * Grade: o "1" do compasso passa a ser a batida mais próxima da agulha.
+     * Com [exact], usa a posição exata (para quando a grade inteira está deslocada).
+     */
+    fun downbeatHere(exact: Boolean = false) {
         val t = track ?: return
-        t.anchor = pos / SR
+        val p = pos / SR
+        t.anchor = if (exact || t.bpm <= 0) p else t.anchor + round((p - t.anchor) / t.period) * t.period
+        t.anchorManual = true
         saveEdit()
+    }
+
+    /** Troca o BPM mantendo a batida perto da agulha no mesmo lugar (e o "1" no mesmo tempo do compasso). */
+    fun setBpmPivot(newBpm: Double) {
+        val t = track ?: return
+        val nb = round(newBpm * 100) / 100
+        if (nb <= 0) return
+        if (t.bpm > 0) {
+            val oldPer = t.period
+            val k = round((pos / SR - t.anchor) / oldPer)
+            val beat = t.anchor + k * oldPer
+            t.anchor = beat - k * (60.0 / nb)
+        }
+        t.bpm = nb
+        saveEdit()
+    }
+
+    private val taps = ArrayList<Long>()
+    private val refineTask = Runnable { refineBpm() }
+
+    /** Tap tempo: a partir da 4ª batida já ajusta o BPM; 1,5 s depois da última, afina pela análise do áudio. */
+    fun tap() {
+        val now = System.nanoTime()
+        if (taps.isNotEmpty() && now - taps.last() > 2_000_000_000L) taps.clear()
+        taps.add(now)
+        if (taps.size > 16) taps.removeAt(0)
+        val n = taps.size
+        if (n < 4) { ui.tapInfo = "TAP: continue batendo ($n)"; return }
+        val mi = (n - 1) / 2.0
+        val mt = taps.average()
+        var num = 0.0
+        var den = 0.0
+        for (i in 0 until n) { num += (i - mi) * (taps[i] - mt); den += (i - mi) * (i - mi) }
+        val bpm = 60e9 / (num / den)
+        if (bpm !in 40.0..240.0) { ui.tapInfo = "TAP: ritmo irregular, recomece"; taps.clear(); return }
+        setBpmPivot(bpm)
+        ui.tapInfo = "TAP: %.1f BPM (afinando ao parar)".format(bpm)
+        Pista.main.removeCallbacks(refineTask)
+        Pista.main.postDelayed(refineTask, 1500)
+    }
+
+    /** Afina o BPM e a grade com a análise do áudio, procurando só perto do BPM atual. */
+    fun refineBpm() {
+        val l = loaded ?: return
+        val t = l.track
+        if (t.bpm <= 0) return
+        val hint = t.bpm
+        ui.tapInfo = "Afinando BPM…"
+        Thread {
+            try {
+                Work.analyze(t, l.orig, l.frames, { loaded !== l }, hint)
+                Pista.main.post { ui.tapInfo = "BPM afinado: %.2f".format(t.bpm); ui.edits++ }
+            } catch (e: Throwable) {
+                Pista.main.post { ui.tapInfo = "" }
+            }
+        }.start()
+    }
+
+    fun resetCue() {
+        val t = track ?: return
+        t.cue = -1.0
+        saveEdit()
+    }
+
+    /** Início onde a bateria entra (precisa das faixas separadas), encaixado no "1" do compasso. */
+    fun startAtDrums(): Boolean {
+        val l = loaded ?: return false
+        val st = l.stems ?: return false
+        val dr = st[1]
+        val win = SR / 10
+        val nw = l.stemFrames / win
+        if (nw < 10) return false
+        val e = DoubleArray(nw)
+        for (w in 0 until nw) {
+            var s = 0.0
+            var i = w * win
+            val end = i + win
+            while (i < end) { val v = dr.get(i * 2) + dr.get(i * 2 + 1); s += v.toDouble() * v; i += 4 }
+            e[w] = s
+        }
+        val mean = e.average()
+        if (mean <= 0) return false
+        val thr = mean * 0.15
+        var first = -1
+        for (w in 0 until nw - 4) {
+            if (e[w] > thr && e[w + 1] > thr * 0.5 && e[w + 2] > thr * 0.5 && e[w + 3] > thr * 0.5) { first = w; break }
+        }
+        if (first < 0) return false
+        val t = l.track
+        val sec = (first * win - l.stemOff).toDouble() / SR
+        t.cue = if (t.bpm > 0) {
+            val bar = 4 * t.period
+            t.anchor + ceil((sec - 0.08 - t.anchor) / bar) * bar
+        } else sec
+        if (t.cue < 0) t.cue = 0.0
+        saveEdit()
+        return true
     }
 
     /** Grade: move o "1" em batidas inteiras (ex.: +1 = o próximo tempo vira o 1). */
@@ -179,8 +282,7 @@ class Deck(val index: Int) {
     fun fineBpm(d: Double) {
         val t = track ?: return
         if (t.bpm <= 0) return
-        t.bpm = round((t.bpm + d) * 1000) / 1000
-        saveEdit()
+        setBpmPivot(t.bpm + d)
     }
 
     private fun saveEdit() {

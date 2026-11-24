@@ -36,7 +36,7 @@ object Analyzer {
     var DEBUG = false
     const val WAVE_RATE = SRA.toDouble() / WAVE_HOP
 
-    fun analyze(pcm: ShortBuffer, frames: Int, cancel: () -> Boolean): Analysis {
+    fun analyze(pcm: ShortBuffer, frames: Int, cancel: () -> Boolean, hint: Double = 0.0): Analysis {
         val x = mono(pcm, frames)
         val wave = waveform(x)
         var maxAbs = 0f
@@ -86,13 +86,15 @@ object Analyzer {
         }
 
         val e = detrend(env, 16)
-        val bpm0 = tempo(e)
+        // com [hint] (tap tempo) só procura perto do valor batido
+        val bpm0 = if (hint > 0) hint else tempo(e)
+        val span = if (hint > 0) 2.0 else 0.6
         // refinamento fino de BPM e fase pela soma em pente
         var bestBpm = bpm0
         var bestPhase = 0.0
         var bestScore = -1e18
-        var b = bpm0 - 0.6
-        while (b <= bpm0 + 0.6) {
+        var b = bpm0 - span
+        while (b <= bpm0 + span) {
             val (ph, sc) = bestPhase(e, 60.0 * FPS / b)
             if (sc > bestScore) { bestScore = sc; bestBpm = b; bestPhase = ph }
             b += 0.02
