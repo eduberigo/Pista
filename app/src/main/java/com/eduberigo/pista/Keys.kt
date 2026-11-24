@@ -122,3 +122,46 @@ class Chroma {
 
     fun key(): Int = Keys.detect(acc)
 }
+
+/** Combinação de músicas por tom e BPM em relação a uma referência. */
+object Match {
+    const val SAME = 1
+    const val REL = 2
+    const val FIFTH = 4
+    const val CHROM = 8
+    const val ALL = SAME or REL or FIFTH or CHROM
+
+    class Rel(val kind: Int, val label: String, val cost: Double)
+
+    /** Relação do tom [c] (candidata) com o tom [r] (referência), ou null se não for nenhuma das quatro. */
+    fun relation(r: Int, c: Int): Rel? {
+        if (r < 0 || c < 0) return null
+        if (r == c) return Rel(SAME, "mesmo tom", 0.0)
+        val rMin = r >= 12
+        val cMin = c >= 12
+        if (rMin != cMin) {
+            return if (Keys.camelotNum(r) == Keys.camelotNum(c)) Rel(REL, "relativa", 1.0) else null
+        }
+        val d = ((c % 12 - r % 12) % 12 + 12) % 12
+        return when (d) {
+            7 -> Rel(FIFTH, "5ª acima", 1.5)
+            5 -> Rel(FIFTH, "4ª acima", 1.5)
+            1 -> Rel(CHROM, "+1 semitom", 2.0)
+            11 -> Rel(CHROM, "−1 semitom", 2.0)
+            else -> null
+        }
+    }
+
+    /** Diferença de BPM em % (candidata em relação à referência); com [halfDouble] também compara com metade/dobro. */
+    fun bpmDiff(ref: Double, c: Double, halfDouble: Boolean): Double? {
+        if (ref <= 0 || c <= 0) return null
+        var best = (c - ref) / ref * 100
+        if (halfDouble) {
+            for (m in doubleArrayOf(2.0, 0.5)) {
+                val v = (c * m - ref) / ref * 100
+                if (kotlin.math.abs(v) < kotlin.math.abs(best)) best = v
+            }
+        }
+        return best
+    }
+}

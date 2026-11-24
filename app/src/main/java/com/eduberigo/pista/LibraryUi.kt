@@ -44,32 +44,49 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import java.io.File
-import kotlin.math.abs
 
 private val SORTS = listOf("Título", "Artista", "BPM", "Tom", "Recentes", "Mais tocadas")
 
-private fun bpmClose(a: Double, b: Double): Boolean {
-    if (a <= 0 || b <= 0) return false
-    for (m in doubleArrayOf(1.0, 2.0, 0.5)) if (abs(a * m - b) / b <= 0.06) return true
-    return false
+
+/** Referência para combinar: BPM efetivo e tom (já com mudança de tom do deck). */
+private class Ref(val label: String, val track: Track, val bpm: Double, val key: Int)
+
+private fun deckRef(i: Int): Ref? {
+    val d = Pista.engine.decks[i]
+    val t = d.track ?: return null
+    val bpm = if (d.effBpm > 0) d.effBpm else t.bpm
+    return Ref("Deck ${i + 1}", t, bpm, Keys.shifted(t.key, d.keyShift))
 }
+
+private class Row2(val t: Track, val info: String?, val good: Boolean)
 
 @Composable
 fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
     val ctx = LocalContext.current
     val lib = Pista.library
+    val p = Pista.prefs
     val ver = lib.version.intValue
     val scan = lib.scanStatus.value
     var query by remember { mutableStateOf("") }
-    var sort by remember { mutableIntStateOf(Pista.prefs.getInt("sort", 0)) }
-    var compat by remember { mutableStateOf(false) }
+    var sort by remember { mutableIntStateOf(p.getInt("sort", 0)) }
     var target by remember { mutableIntStateOf(deck) }
     var menu by remember { mutableStateOf<Track?>(null) }
     var confirm by remember { mutableStateOf<Track?>(null) }
-    val ref = Pista.engine.decks[1 - target].track
+    // modo COMBINAR
+    var match by remember { mutableStateOf(p.getBoolean("match", false)) }
+    var refSrc by remember { mutableIntStateOf(1 - deck) } // 0/1 = deck, 2 = música escolhida
+    var refTrack by remember { mutableStateOf<Track?>(null) }
+    var tol by remember { mutableIntStateOf(p.getInt("bpmTol", 6)) } // %, 0 = qualquer
+    var halfDouble by remember { mutableStateOf(p.getBoolean("halfDouble", true)) }
+    var keyMask by remember { mutableIntStateOf(p.getInt("keyMask", Match.ALL)) } // 0 = qualquer tom
+
+    val ref: Ref? = when (refSrc) {
+        2 -> refTrack?.let { Ref("Escolhida", it, it.bpm, it.key) }
+        else -> deckRef(refSrc)
+    }
 
     val all = remember(ver) { lib.snapshot() }
-    val list = remember(ver, query, sort, compat, target, ref) {
+    val list = remember(ver, query, sort, target, match, ref?.track?.id, ref?.bpm, ref?.key, tol, halfDouble, keyMask) {
         val q = query.trim().lowercase()
         var l = all.asSequence()
         if (q.isNotEmpty()) l = l.filter {
@@ -77,18 +94,34 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
                 it.album.lowercase().contains(q) || it.genre.lowercase().contains(q) ||
                 File(it.path).name.lowercase().contains(q)
         }
-        if (compat && ref != null) l = l.filter {
-            it.id != ref.id && bpmClose(it.bpm, ref.bpm) && (ref.key < 0 || it.key < 0 || Keys.compatible(it.key, ref.key))
+        if (match && ref != null) {
+            l.filter { it.id != ref.track.id }
+                .mapNotNull { t ->
+                    val bd = Match.bpmDiff(ref.bpm, t.bpm, halfDouble)
+                    if (tol > 0 && (bd == null || kotlin.math.abs(bd) > tol)) return@mapNotNull null
+                    val rel = Match.relation(ref.key, t.key)
+                    if (keyMask != 0 && (rel == null || rel.kind and keyMask == 0)) return@mapNotNull null
+                    val cost = kotlin.math.abs(bd ?: 50.0) + (rel?.cost ?: 4.0) * 2
+                    val info = listOfNotNull(
+                        bd?.let { "BPM %+.1f%%".format(it) },
+                        rel?.label ?: if (t.key < 0) "tom desconhecido" else "outro tom",
+                    ).joinToString(" · ")
+                    Triple(t, cost, info)
+                }
+                .sortedBy { it.second }
+                .map { Row2(it.first, it.third, true) }
+                .toList()
+        } else {
+            val s = when (sort) {
+                1 -> l.sortedWith(compareBy({ it.artist.lowercase() }, { it.name.lowercase() }))
+                2 -> l.sortedWith(compareBy({ if (it.bpm > 0) it.bpm else 999.0 }, { it.name.lowercase() }))
+                3 -> l.sortedWith(compareBy({ if (it.key >= 0) Keys.camelotNum(it.key) * 2 + (if (it.key < 12) 1 else 0) else 99 }, { it.bpm }))
+                4 -> l.sortedByDescending { it.addedAt }
+                5 -> l.sortedWith(compareByDescending<Track> { it.plays }.thenByDescending { it.lastPlayed })
+                else -> l.sortedBy { it.name.lowercase() }
+            }
+            s.map { Row2(it, null, false) }.toList()
         }
-        val s = when (sort) {
-            1 -> l.sortedWith(compareBy({ it.artist.lowercase() }, { it.name.lowercase() }))
-            2 -> l.sortedWith(compareBy({ if (it.bpm > 0) it.bpm else 999.0 }, { it.name.lowercase() }))
-            3 -> l.sortedWith(compareBy({ if (it.key >= 0) Keys.camelotNum(it.key) * 2 + (if (it.key < 12) 1 else 0) else 99 }, { it.bpm }))
-            4 -> l.sortedByDescending { it.addedAt }
-            5 -> l.sortedWith(compareByDescending<Track> { it.plays }.thenByDescending { it.lastPlayed })
-            else -> l.sortedBy { it.name.lowercase() }
-        }
-        s.toList()
     }
 
     fun load(t: Track) {
@@ -120,15 +153,68 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            SORTS.forEachIndexed { i, s ->
-                Pill(s, on = sort == i, fontSize = 11) { sort = i; Pista.prefs.edit().putInt("sort", i).apply() }
+            Pill("COMBINAR TOM + BPM", on = match, color = C.green, fontSize = 11) {
+                match = !match; p.edit().putBoolean("match", match).apply()
             }
-            Pill("Compatíveis com o outro deck", on = compat, color = C.green, enabled = ref != null, fontSize = 11) { compat = !compat }
+            if (!match) SORTS.forEachIndexed { i, s ->
+                Pill(s, on = sort == i, fontSize = 11) { sort = i; p.edit().putInt("sort", i).apply() }
+            }
+        }
+        if (match) {
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)
+                    .clip(RoundedCornerShape(10.dp)).background(C.panel).padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("Referência", color = C.dim, fontSize = 11.sp, modifier = Modifier.width(72.dp))
+                    Pill("Deck 1", on = refSrc == 0, color = C.deck1, fontSize = 11) { refSrc = 0 }
+                    Pill("Deck 2", on = refSrc == 1, color = C.deck2, fontSize = 11) { refSrc = 1 }
+                    Pill("Escolhida", on = refSrc == 2, enabled = refTrack != null, fontSize = 11) { refSrc = 2 }
+                }
+                Text(
+                    if (ref == null) "Sem referência: carregue uma música no deck ou segure uma música da lista e escolha \"usar como referência\"."
+                    else "${ref.track.name} · ${fmtBpm(ref.bpm)} BPM · " +
+                        (if (ref.key >= 0) "${Keys.name(ref.key)} (${Keys.camelot(ref.key)})" else "tom desconhecido"),
+                    color = if (ref == null) C.yellow else C.txt, fontSize = 12.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                )
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("BPM", color = C.dim, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+                    for (v in listOf(2, 4, 6, 10, 0)) {
+                        Pill(if (v == 0) "qualquer" else "±$v%", on = tol == v, fontSize = 11) {
+                            tol = v; p.edit().putInt("bpmTol", v).apply()
+                        }
+                    }
+                    Pill("½ e 2×", on = halfDouble, fontSize = 11) {
+                        halfDouble = !halfDouble; p.edit().putBoolean("halfDouble", halfDouble).apply()
+                    }
+                }
+                Row(
+                    Modifier.horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("TOM", color = C.dim, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+                    val opts = listOf(Match.SAME to "mesmo", Match.REL to "relativa", Match.FIFTH to "4ª/5ª", Match.CHROM to "±1 semitom")
+                    for ((bit, name) in opts) {
+                        Pill(name, on = keyMask and bit != 0, fontSize = 11) {
+                            keyMask = keyMask xor bit; p.edit().putInt("keyMask", keyMask).apply()
+                        }
+                    }
+                    Pill("qualquer", on = keyMask == 0, fontSize = 11) {
+                        keyMask = if (keyMask == 0) Match.ALL else 0; p.edit().putInt("keyMask", keyMask).apply()
+                    }
+                }
+            }
         }
         val analyzed = all.count { it.analyzed }
         val stems = all.count { it.stems }
         Text(
-            if (scan.isNotEmpty()) scan else "${all.size} músicas · $analyzed analisadas · $stems separadas · mostrando ${list.size}",
+            if (scan.isNotEmpty()) scan
+            else if (match) "${list.size} combinações, das mais próximas para as mais distantes"
+            else "${all.size} músicas · $analyzed analisadas · $stems separadas · mostrando ${list.size}",
             color = C.dim, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
         if (lib.root.isEmpty()) {
@@ -139,8 +225,8 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
-            items(list, key = { it.id }) { t ->
-                TrackRow(t, ref, onTap = { load(t) }, onLong = { menu = t })
+            items(list, key = { it.t.id }) { r ->
+                TrackRow(r.t, if (match) ref?.key else null, r.info, onTap = { load(r.t) }, onLong = { menu = r.t })
                 HorizontalDivider(color = C.line, thickness = 0.5.dp)
             }
         }
@@ -156,6 +242,9 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
                     if (t.error != null) Text("Último erro: ${t.error}", color = C.red, fontSize = 12.sp)
                     Pill("Carregar no deck 1", Modifier.fillMaxWidth()) { menu = null; target = 0; load(t) }
                     Pill("Carregar no deck 2", Modifier.fillMaxWidth()) { menu = null; target = 1; load(t) }
+                    Pill("Usar como referência para combinar", Modifier.fillMaxWidth()) {
+                        menu = null; refTrack = t; refSrc = 2; match = true; p.edit().putBoolean("match", true).apply()
+                    }
                     if (!t.stems) Pill("Separar faixas agora", Modifier.fillMaxWidth()) { menu = null; Processor.request(ctx, t) }
                     Pill("Refazer análise (BPM, tom, grade)", Modifier.fillMaxWidth()) {
                         menu = null
@@ -188,7 +277,7 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
 }
 
 @Composable
-private fun TrackRow(t: Track, ref: Track?, onTap: () -> Unit, onLong: () -> Unit) {
+private fun TrackRow(t: Track, refKey: Int?, info: String?, onTap: () -> Unit, onLong: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -202,14 +291,14 @@ private fun TrackRow(t: Track, ref: Track?, onTap: () -> Unit, onLong: () -> Uni
                 listOf(t.artist, fmtTime(t.durationMs / 1000.0)).filter { it.isNotBlank() }.joinToString(" · "),
                 color = C.dim, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
+            if (info != null) Text(info, color = C.green, fontSize = 12.sp, maxLines = 1)
         }
         Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 8.dp)) {
-            val near = ref != null && bpmClose(t.bpm, ref.bpm)
-            Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = if (near) C.green else C.txt, fontSize = 14.sp)
+            Text(if (t.bpm > 0) "%.1f".format(t.bpm) else "—", color = C.txt, fontSize = 14.sp)
             if (t.key >= 0) {
-                val good = ref != null && ref.key >= 0 && Keys.compatible(t.key, ref.key)
+                val good = refKey == null || refKey < 0 || Match.relation(refKey, t.key) != null
                 Box(
-                    Modifier.clip(RoundedCornerShape(4.dp)).background(Color(Keys.color(t.key)).copy(alpha = if (good || ref == null) 1f else 0.45f))
+                    Modifier.clip(RoundedCornerShape(4.dp)).background(Color(Keys.color(t.key)).copy(alpha = if (good) 1f else 0.45f))
                         .padding(horizontal = 5.dp, vertical = 1.dp),
                 ) { Text(Keys.camelot(t.key), color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold) }
             }
