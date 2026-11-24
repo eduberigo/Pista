@@ -1,0 +1,58 @@
+name: Gerar APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+
+      - name: Compilar
+        shell: bash
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Guardar log de erro (branch logs)
+        if: failure()
+        shell: bash
+        run: |
+          git config user.name "build-bot"
+          git config user.email "build-bot@users.noreply.github.com"
+          grep -E "^e: |error:|What went wrong|FAILURE" -A4 build.log > erros.txt || true
+          echo "----- fim do log -----" >> erros.txt
+          tail -150 build.log >> erros.txt
+          cp erros.txt /tmp/erros.txt
+          git checkout --orphan logs-tmp
+          git rm -rf --cached . > /dev/null
+          cp /tmp/erros.txt erros.txt
+          git add -f erros.txt
+          git commit -m "log da compilação ${{ github.run_number }} (${{ github.sha }})"
+          git push -f origin HEAD:logs
+
+      - name: Renomear APK
+        run: cp app/build/outputs/apk/release/app-release.apk Pista-0.1.${{ github.run_number }}.apk
+
+      - name: Publicar versão
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.${{ github.run_number }}
+          name: Pista 0.1.${{ github.run_number }}
+          body: "Versão ${{ github.run_number }} — commit ${{ github.sha }}"
+          files: Pista-0.1.${{ github.run_number }}.apk
