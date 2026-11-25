@@ -433,6 +433,7 @@ private fun ColumnScope.LoopPads(d: Deck) {
 
 @Composable
 private fun PadColumn(d: Deck, modifier: Modifier) {
+    val ctx = LocalContext.current
     d.ui.edits
     val t = d.ui.track
     Column(
@@ -448,7 +449,7 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
                     val set = (t?.hotcues?.get(i) ?: -1.0) >= 0
                     Pill(
                         "${i + 1}", Modifier.weight(1f).height(46.dp), on = set, color = C.hot[i],
-                        onLong = { d.clearHotCue(i) },
+                        onLong = { d.clearHotCue(i) }, instant = true,
                     ) { d.hotCue(i) }
                 }
             }
@@ -473,6 +474,8 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
             Pill("×2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(2.0) }
             Pill("AFINAR", Modifier.weight(1.4f), fontSize = 10) { d.refineBpm() }
         }
+        Pill("BPM DA ANÁLISE", Modifier.fillMaxWidth(), fontSize = 10) { d.restoreGrid(ctx) }
+        Pill("ANDAMENTO ORIGINAL (tira o sync)", Modifier.fillMaxWidth(), fontSize = 10) { d.resetTempo() }
         Section("GRADE (downbeat = o 1)")
         Pill("MARCAR 1 AQUI", Modifier.fillMaxWidth(), fontSize = 11, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
         Text("Toque: o 1 vai para a batida mais próxima. Segure: posição exata.", color = C.dim, fontSize = 9.sp)
@@ -515,11 +518,11 @@ private fun Transport(onTempo: (Int) -> Unit) {
             SyncPill(decks[1], Modifier.width(74.dp))
         }
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Pill("SET", Modifier.weight(1f), fontSize = 12) { decks[0].setCue() }
-            Pill("CUE ↩", Modifier.weight(1f), fontSize = 12) { decks[0].gotoCue() }
+            Pill("SET", Modifier.weight(1f), fontSize = 12, instant = true) { decks[0].setCue() }
+            Pill("CUE ↩", Modifier.weight(1f), fontSize = 12, instant = true) { decks[0].gotoCue() }
             Spacer(Modifier.width(10.dp))
-            Pill("SET", Modifier.weight(1f), fontSize = 12) { decks[1].setCue() }
-            Pill("CUE ↩", Modifier.weight(1f), fontSize = 12) { decks[1].gotoCue() }
+            Pill("SET", Modifier.weight(1f), fontSize = 12, instant = true) { decks[1].setCue() }
+            Pill("CUE ↩", Modifier.weight(1f), fontSize = 12, instant = true) { decks[1].gotoCue() }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PlayButton(decks[0])
@@ -551,7 +554,9 @@ private fun BpmBox(d: Deck, modifier: Modifier, left: Boolean, onClick: () -> Un
     Tick.frame.longValue
     val pct = (d.rate - 1.0) * 100
     Column(
-        modifier.clip(RoundedCornerShape(8.dp)).clickable { onClick() }.padding(horizontal = 4.dp),
+        modifier.clip(RoundedCornerShape(8.dp))
+            .pointerInput(d) { detectTapGestures(onTap = { onClick() }, onLongPress = { d.resetTempo() }) }
+            .padding(horizontal = 4.dp),
         horizontalAlignment = if (left) Alignment.Start else Alignment.End,
     ) {
         Text(fmtBpm(d.effBpm) + " ▾", color = C.txt, fontSize = 20.sp)
@@ -566,6 +571,7 @@ private fun BpmBox(d: Deck, modifier: Modifier, left: Boolean, onClick: () -> Un
 
 @Composable
 private fun TempoPanel(d: Deck, onClose: () -> Unit) {
+    val ctx = LocalContext.current
     var pitch by remember { mutableFloatStateOf(d.pitch.toFloat()) }
     var range by remember { mutableFloatStateOf(d.range.toFloat()) }
     var keylock by remember { mutableStateOf(d.keylock) }
@@ -602,7 +608,7 @@ private fun TempoPanel(d: Deck, onClose: () -> Unit) {
                         Pista.prefs.edit().putFloat("range", r).apply()
                     }
                 }
-                Pill("ZERAR", Modifier.weight(1f), fontSize = 11) { pitch = 0f; d.sync = false; d.pitch = 0.0 }
+                Pill("ORIGINAL", Modifier.weight(1.2f), fontSize = 11) { pitch = 0f; d.resetTempo() }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Pill("◀◀ empurra", Modifier.weight(1f), fontSize = 11) { d.nudge(-0.04) }
@@ -631,6 +637,7 @@ private fun TempoPanel(d: Deck, onClose: () -> Unit) {
                 Pill("+0,01", Modifier.weight(1f), fontSize = 11) { d.fineBpm(0.01) }
                 Pill("1 AQUI", Modifier.weight(1f), fontSize = 11, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
             }
+            Pill("VOLTAR AO BPM E GRADE DA ANÁLISE", Modifier.fillMaxWidth(), fontSize = 11) { d.restoreGrid(ctx) }
             val tap = d.ui.tapInfo
             if (tap.isNotEmpty()) Text(tap, color = C.green, fontSize = 12.sp)
             Pill("FECHAR", Modifier.fillMaxWidth()) { onClose() }

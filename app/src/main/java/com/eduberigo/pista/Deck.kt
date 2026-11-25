@@ -261,6 +261,39 @@ class Deck(val index: Int) {
         }.start()
     }
 
+    /** Andamento de volta ao original: tira o SYNC e zera o pitch. */
+    fun resetTempo() {
+        sync = false
+        pitch = 0.0
+        bend = 0.0
+    }
+
+    /** BPM e grade de volta ao que a análise achou (desfaz tap, ×2, ajustes de grade). */
+    fun restoreGrid(ctx: android.content.Context): Boolean {
+        val t = track ?: return false
+        if (t.bpmAuto > 0) {
+            t.bpm = t.bpmAuto
+            t.anchor = t.anchorAuto
+            t.anchorManual = false
+            saveEdit()
+            ui.tapInfo = "BPM da análise: %.2f".format(t.bpm)
+            return true
+        }
+        // músicas analisadas antes desta versão: refaz a análise
+        val l = loaded ?: return false
+        ui.tapInfo = "Refazendo a análise…"
+        Thread {
+            try {
+                t.anchorManual = false
+                Work.analyze(t, l.orig, l.frames, { loaded !== l })
+                Pista.main.post { ui.tapInfo = "BPM da análise: %.2f".format(t.bpm); ui.edits++ }
+            } catch (e: Throwable) {
+                Pista.main.post { ui.tapInfo = "" }
+            }
+        }.start()
+        return true
+    }
+
     fun resetCue() {
         val t = track ?: return
         t.cue = -1.0

@@ -62,6 +62,7 @@ object Work {
             t.anchorManual = false
         }
         t.bpm = a.bpm
+        if (hint <= 0) { t.bpmAuto = a.bpm; t.anchorAuto = a.anchor }
         t.autoCue = a.autoCue
         if (!t.keyFromStems) t.key = a.key
         t.gain = a.gain

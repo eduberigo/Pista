@@ -19,6 +19,9 @@ class Track(val id: String, var path: String) {
     var anchor = 0.0
     /** O "1" foi marcado à mão: ao afinar o BPM, só encaixa na batida mais próxima. */
     var anchorManual = false
+    /** Valores da última análise completa, para poder voltar a eles. */
+    var bpmAuto = 0.0
+    var anchorAuto = 0.0
     var autoCue = 0.0
     var cue = -1.0
     var key = -1
@@ -38,7 +41,7 @@ class Track(val id: String, var path: String) {
         put("title", title); put("artist", artist); put("album", album); put("genre", genre)
         put("dur", durationMs); put("size", size); put("added", addedAt)
         put("an", analyzed); put("st", stems)
-        put("bpm", fin(bpm)); put("anchor", fin(anchor)); put("am", anchorManual); put("acue", fin(autoCue)); put("cue", fin(cue))
+        put("bpm", fin(bpm)); put("anchor", fin(anchor)); put("am", anchorManual); put("bpmA", fin(bpmAuto)); put("ancA", fin(anchorAuto)); put("acue", fin(autoCue)); put("cue", fin(cue))
         put("key", key); put("kst", keyFromStems); put("gain", fin(gain.toDouble()))
         put("hot", JSONArray().apply { hotcues.forEach { put(fin(it)) } })
         put("plays", plays); put("last", lastPlayed)
@@ -61,6 +64,8 @@ class Track(val id: String, var path: String) {
             bpm = o.optDouble("bpm", 0.0)
             anchor = o.optDouble("anchor", 0.0)
             anchorManual = o.optBoolean("am")
+            bpmAuto = o.optDouble("bpmA", 0.0)
+            anchorAuto = o.optDouble("ancA", 0.0)
             autoCue = o.optDouble("acue", 0.0)
             cue = o.optDouble("cue", -1.0)
             key = o.optInt("key", -1)

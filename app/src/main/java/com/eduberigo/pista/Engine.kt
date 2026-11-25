@@ -29,6 +29,7 @@ class Engine {
     @Volatile var leader = 0
     @Volatile var peakL = 0f
     @Volatile var peakR = 0f
+    @Volatile var latencyMs = 0
     val outStatus = mutableStateOf("")
 
     @Volatile private var running = false
@@ -197,6 +198,11 @@ class Engine {
             Pista.main.post { outStatus.value = "" }
         }
         val track = at ?: build(rate, 2)
+        // latência baixa: começa com um buffer pequeno e só aumenta se houver falhas (underrun)
+        var bufFrames = BLOCK * 2
+        runCatching { track.setBufferSizeInFrames(bufFrames) }
+        var lastUnder = track.underrunCount
+        var checkAt = System.nanoTime() + 500_000_000L
         track.play()
         val n = BLOCK
         val out = FloatArray(n * ch)
@@ -285,6 +291,16 @@ class Engine {
                 peakL = pkL; peakR = pkR
                 val w = track.write(out, 0, n * ch, AudioTrack.WRITE_BLOCKING)
                 if (w < 0) break
+                if (now > checkAt) {
+                    checkAt = now + 500_000_000L
+                    val u = track.underrunCount
+                    if (u > lastUnder && bufFrames < track.bufferCapacityInFrames) {
+                        bufFrames = minOf(track.bufferCapacityInFrames, bufFrames + BLOCK)
+                        runCatching { track.setBufferSizeInFrames(bufFrames) }
+                    }
+                    lastUnder = u
+                    latencyMs = bufFrames * 1000 / rate
+                }
             }
         } finally {
             runCatching { track.stop() }

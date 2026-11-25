@@ -103,6 +103,7 @@ fun Pill(
     enabled: Boolean = true,
     fontSize: Int = 13,
     onLong: (() -> Unit)? = null,
+    instant: Boolean = false,
     onClick: () -> Unit,
 ) {
     val click by rememberUpdatedState(onClick)
@@ -115,10 +116,18 @@ fun Pill(
             .background(if (on) color else C.btn)
             .border(1.dp, if (on) color else C.line, shape)
             .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { if (en) click() },
-                    onLongPress = { if (en) long?.invoke() },
-                )
+                if (instant) {
+                    // dispara no toque (sem esperar soltar o dedo): play, cue, hot cues
+                    detectTapGestures(
+                        onPress = { if (en) click() },
+                        onLongPress = { if (en) long?.invoke() },
+                    )
+                } else {
+                    detectTapGestures(
+                        onTap = { if (en) click() },
+                        onLongPress = { if (en) long?.invoke() },
+                    )
+                }
             }
             .padding(horizontal = 8.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
@@ -263,7 +272,7 @@ fun PlayButton(d: Deck, modifier: Modifier = Modifier) {
     Canvas(
         modifier
             .size(62.dp)
-            .pointerInput(d) { detectTapGestures(onTap = { Pista.engine.togglePlay(d) }) },
+            .pointerInput(d) { detectTapGestures(onPress = { Pista.engine.togglePlay(d) }) },
     ) {
         val r = size.minDimension / 2
         drawCircle(C.btn, r)

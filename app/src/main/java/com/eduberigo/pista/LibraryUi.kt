@@ -79,6 +79,12 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
     var tol by remember { mutableIntStateOf(p.getInt("bpmTol", 6)) } // %, 0 = qualquer
     var halfDouble by remember { mutableStateOf(p.getBoolean("halfDouble", true)) }
     var keyMask by remember { mutableIntStateOf(p.getInt("keyMask", Match.ALL)) } // 0 = qualquer tom
+    // navegação por pastas
+    var folderMode by remember { mutableStateOf(p.getBoolean("folders", true)) }
+    var curDir by remember { mutableStateOf(p.getString("curDir", "") ?: "") }
+    val root = lib.root.trimEnd('/')
+    val dir = if (curDir.isNotEmpty() && (curDir == root || curDir.startsWith("$root/"))) curDir else root
+    fun goDir(d: String) { curDir = d; p.edit().putString("curDir", d).apply() }
 
     val ref: Ref? = when (refSrc) {
         2 -> refTrack?.let { Ref("Escolhida", it, it.bpm, it.key) }
@@ -86,9 +92,28 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
     }
 
     val all = remember(ver) { lib.snapshot() }
-    val list = remember(ver, query, sort, target, match, ref?.track?.id, ref?.bpm, ref?.key, tol, halfDouble, keyMask) {
+    val showFolders = folderMode && dir.isNotEmpty() && query.isBlank() && !match
+    val folders = remember(ver, dir, showFolders) {
+        if (!showFolders) emptyList()
+        else {
+            val prefix = "$dir/"
+            val counts = HashMap<String, Int>()
+            for (t in all) if (t.path.startsWith(prefix)) {
+                val rest = t.path.substring(prefix.length)
+                val slash = rest.indexOf('/')
+                if (slash > 0) counts.merge(rest.substring(0, slash), 1, Int::plus)
+            }
+            counts.entries.sortedBy { it.key.lowercase() }.map { it.key to it.value }
+        }
+    }
+    val list = remember(ver, query, sort, target, match, ref?.track?.id, ref?.bpm, ref?.key, tol, halfDouble, keyMask, dir, folderMode) {
         val q = query.trim().lowercase()
         var l = all.asSequence()
+        if (folderMode && dir.isNotEmpty()) {
+            val prefix = "$dir/"
+            l = if (q.isEmpty() && !match) l.filter { it.path.startsWith(prefix) && it.path.indexOf('/', prefix.length) < 0 }
+            else l.filter { it.path.startsWith(prefix) }
+        }
         if (q.isNotEmpty()) l = l.filter {
             it.title.lowercase().contains(q) || it.artist.lowercase().contains(q) ||
                 it.album.lowercase().contains(q) || it.genre.lowercase().contains(q) ||
@@ -153,6 +178,9 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
+            Pill("📁 PASTAS", on = folderMode, color = C.accent, fontSize = 11) {
+                folderMode = !folderMode; p.edit().putBoolean("folders", folderMode).apply()
+            }
             Pill("COMBINAR TOM + BPM", on = match, color = C.green, fontSize = 11) {
                 match = !match; p.edit().putBoolean("match", match).apply()
             }
@@ -209,11 +237,25 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
                 }
             }
         }
+        if (folderMode && dir.isNotEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Pill("↑", enabled = dir != root, fontSize = 13) { goDir(dir.substringBeforeLast('/')) }
+                Pill("⌂", enabled = dir != root, fontSize = 13) { goDir(root) }
+                val rel = if (dir == root) File(root).name else File(root).name + dir.removePrefix(root)
+                Text(rel, color = C.txt, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+            }
+            if (query.isNotBlank() || match) Text("Buscando dentro desta pasta e subpastas", color = C.dim, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 10.dp))
+        }
         val analyzed = all.count { it.analyzed }
         val stems = all.count { it.stems }
         Text(
             if (scan.isNotEmpty()) scan
             else if (match) "${list.size} combinações, das mais próximas para as mais distantes"
+            else if (showFolders) "${folders.size} pastas · ${list.size} músicas aqui · $analyzed de ${all.size} analisadas · $stems separadas"
             else "${all.size} músicas · $analyzed analisadas · $stems separadas · mostrando ${list.size}",
             color = C.dim, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
         )
@@ -225,6 +267,16 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth()) {
+            items(folders, key = { "dir:" + it.first }) { (name, count) ->
+                Row(
+                    Modifier.fillMaxWidth().clickable { goDir("$dir/$name") }.padding(horizontal = 10.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("📁  $name", color = C.txt, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                    Text("$count", color = C.dim, fontSize = 12.sp)
+                }
+                HorizontalDivider(color = C.line, thickness = 0.5.dp)
+            }
             items(list, key = { it.t.id }) { r ->
                 TrackRow(r.t, if (match) ref?.key else null, r.info, onTap = { load(r.t) }, onLong = { menu = r.t })
                 HorizontalDivider(color = C.line, thickness = 0.5.dp)
@@ -398,6 +450,10 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit) {
             )
             val os = e.outStatus.value
             if (os.isNotEmpty()) Text(os, color = C.yellow, fontSize = 12.sp)
+            Text(
+                "Buffer do app: ${e.latencyMs} ms (cresce sozinho se o áudio falhar). Fone Bluetooth soma 150–300 ms que o app não controla.",
+                color = C.dim, fontSize = 12.sp,
+            )
 
             Head("CROSSFADER")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
