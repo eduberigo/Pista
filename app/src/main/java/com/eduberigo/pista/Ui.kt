@@ -6,6 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
@@ -94,6 +96,35 @@ fun fmtTime(sec: Double): String {
 
 fun fmtBpm(b: Double): String = if (b <= 0) "—" else "%.1f".format(b)
 
+
+/**
+ * Arraste relativo sem "zona morta": responde ao mínimo movimento do dedo.
+ * [span] = pixels para percorrer o curso inteiro; [vertical] = eixo Y (para cima aumenta).
+ */
+private suspend fun androidx.compose.ui.input.pointer.PointerInputScope.fineDrag(
+    vertical: Boolean,
+    span: () -> Float,
+    current: () -> Float,
+    min: Float,
+    max: Float,
+    onValue: (Float) -> Unit,
+) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false)
+        val start = current()
+        val p0 = if (vertical) down.position.y else down.position.x
+        while (true) {
+            val ev = awaitPointerEvent()
+            val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+            if (!c.pressed) break
+            val p = if (vertical) c.position.y else c.position.x
+            val d = if (vertical) p0 - p else p - p0
+            onValue((start + d / span() * (max - min)).coerceIn(min, max))
+            c.consume()
+        }
+    }
+}
+
 @Composable
 fun Pill(
     text: String,
@@ -166,12 +197,7 @@ fun Knob(
             Modifier
                 .size(size)
                 .pointerInput(Unit) {
-                    var acc = 0f
-                    detectVerticalDragGestures(onDragStart = { acc = cur }) { c, dy ->
-                        c.consume()
-                        acc = (acc - dy / 260f * (max - min)).coerceIn(min, max)
-                        ch(acc)
-                    }
+                    fineDrag(true, { 260f }, { cur }, min, max) { ch(it) }
                 }
                 .pointerInput(Unit) {
                     detectTapGestures(onDoubleTap = { ch(default) })
@@ -210,12 +236,7 @@ fun VFader(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifie
     Canvas(
         modifier
             .pointerInput(Unit) {
-                var acc = 0f
-                detectVerticalDragGestures(onDragStart = { acc = cur }) { c, dy ->
-                    c.consume()
-                    acc = (acc - dy / (size.height * 0.85f)).coerceIn(0f, 1f)
-                    ch(acc)
-                }
+                fineDrag(true, { size.height - 28.dp.toPx() }, { cur }, 0f, 1f) { ch(it) }
             }
             .pointerInput(Unit) { detectTapGestures(onDoubleTap = { ch(1f) }) },
     ) {
@@ -241,12 +262,8 @@ fun HFader(value: Float, onChange: (Float) -> Unit, modifier: Modifier = Modifie
     Canvas(
         modifier
             .pointerInput(Unit) {
-                var acc = 0f
-                detectHorizontalDragGestures(onDragStart = { acc = cur }) { c, dx ->
-                    c.consume()
-                    acc = (acc + dx / (size.width * 0.85f)).coerceIn(0f, 1f)
-                    ch(acc)
-                }
+                // 1:1 com o dedo e sem zona morta
+                fineDrag(false, { size.width - 32.dp.toPx() }, { cur }, 0f, 1f) { ch(it) }
             }
             .pointerInput(Unit) { detectTapGestures(onDoubleTap = { ch(default) }) },
     ) {

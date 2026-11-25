@@ -457,16 +457,17 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit) {
 
             Head("CROSSFADER")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                for ((i, nm) in listOf("Suave", "Média", "Corte rápido").withIndex()) {
+                for ((i, nm) in listOf("Suave", "Constante", "Média", "Corte").withIndex()) {
                     Pill(nm, Modifier.weight(1f), on = curve == i, fontSize = 11) { curve = i; e.curve = i; Pista.prefs.edit().putInt("curve", i).apply() }
                 }
             }
 
             Text(
                 when (curve) {
-                    0 -> "Suave: uma música desce enquanto a outra sobe ao longo de todo o curso. Boa para transições longas."
-                    1 -> "Média: as duas ficam cheias no meio; só cai nas pontas."
-                    else -> "Corte rápido: entra e sai nos últimos milímetros (scratch, cortes)."
+                    0 -> "Suave: a música que entra sobe devagar no começo do curso; no meio as duas estão a −6 dB. Melhor para transições longas."
+                    1 -> "Potência constante: volume total igual em todo o curso; a música que entra aparece mais rápido no começo."
+                    2 -> "Média: as duas ficam cheias no meio; só cai nas pontas."
+                    else -> "Corte: entra e sai nos últimos milímetros (scratch, cortes)."
                 },
                 color = C.dim, fontSize = 12.sp,
             )

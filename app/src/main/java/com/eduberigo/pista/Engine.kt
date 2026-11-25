@@ -226,8 +226,8 @@ class Engine {
                 decks[0].render(aL, aR, n, rate)
                 decks[1].render(bL, bR, n, rate)
                 val blockSec = n.toFloat() / rate
-                // crossfader e volumes seguem o dedo com ~50 ms de suavização
-                val ax = 1f - kotlin.math.exp(-blockSec / 0.05f)
+                // crossfader e volumes: só tira o "degrau" entre toques (~8 ms), sem atraso perceptível
+                val ax = 1f - kotlin.math.exp(-blockSec / 0.008f)
                 sx += (xfade - sx) * ax
                 sv0 += (decks[0].vol - sv0) * ax
                 sv1 += (decks[1].vol - sv1) * ax
@@ -235,18 +235,25 @@ class Engine {
                 val g0: Float
                 val g1: Float
                 when (curve) {
-                    2 -> {
+                    3 -> {
                         g0 = if (x < 0.94f) 1f else ((1f - x) / 0.06f).coerceIn(0f, 1f)
                         g1 = if (x > 0.06f) 1f else (x / 0.06f).coerceIn(0f, 1f)
                     }
-                    1 -> {
+                    2 -> {
                         g0 = if (x <= 0.5f) 1f else cos((x - 0.5f) * PI).toFloat()
                         g1 = if (x >= 0.5f) 1f else cos((0.5f - x) * PI).toFloat()
                     }
-                    else -> {
-                        // potência constante no curso inteiro: uma sobe enquanto a outra desce, sem buraco nem pico no meio
+                    1 -> {
+                        // potência constante: volume total igual no curso inteiro (a entrada é rápida no começo)
                         g0 = cos(x * PI / 2).toFloat()
                         g1 = kotlin.math.sin(x * PI / 2).toFloat()
+                    }
+                    else -> {
+                        // suave: a música que entra sobe devagar no começo do curso (−20 dB a 20%, −6 dB no meio)
+                        val c = cos(x * PI / 2).toFloat()
+                        val sn = kotlin.math.sin(x * PI / 2).toFloat()
+                        g0 = c * c
+                        g1 = sn * sn
                     }
                 }
                 val v0 = sv0 * g0
