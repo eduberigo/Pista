@@ -386,7 +386,8 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit, onBackup: (Boo
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Pill("‹ Voltar", fontSize = 12) { onClose() }
-            Text("  Ajustes", color = C.txt, fontSize = 16.sp)
+            Text("  Ajustes", color = C.txt, fontSize = 16.sp, modifier = Modifier.weight(1f))
+            Text("v${Pista.version}", color = C.dim, fontSize = 13.sp)
         }
         Column(
             Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(14.dp),
@@ -505,7 +506,7 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit, onBackup: (Boo
 
             Head("SOBRE")
             Text(
-                "Pista — separação de faixas no aparelho com HT-Demucs 6s (Meta, licença MIT). " +
+                "Pista versão ${Pista.version} — separação de faixas no aparelho com HT-Demucs 6s (Meta, licença MIT). " +
                     "Arquivos do app: ${Pista.baseDir.path}",
                 color = C.dim, fontSize = 12.sp,
             )

@@ -174,7 +174,10 @@ private fun TabBar(tab: Int, onTab: (Int) -> Unit, openSettings: () -> Unit) {
         names.forEachIndexed { i, n ->
             Pill(n, Modifier.weight(1f), on = tab == i, fontSize = 12) { onTab(i) }
         }
-        Pill("⚙", fontSize = 14) { openSettings() }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Pill("⚙", fontSize = 14) { openSettings() }
+            Text("v${Pista.version}", color = C.dim, fontSize = 8.sp)
+        }
     }
 }
 

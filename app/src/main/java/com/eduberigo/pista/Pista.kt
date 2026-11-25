@@ -26,6 +26,11 @@ object Pista {
     val main = Handler(Looper.getMainLooper())
     private var started = false
 
+    /** Versão instalada, ex.: 0.1.12 (vem do número do build no GitHub). */
+    val version: String by lazy {
+        runCatching { app.packageManager.getPackageInfo(app.packageName, 0).versionName }.getOrNull() ?: "?"
+    }
+
     val baseDir: File get() = File(Environment.getExternalStorageDirectory(), "Pista")
 
     fun init(a: Application) {
