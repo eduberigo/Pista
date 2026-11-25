@@ -395,6 +395,7 @@ private fun LoopBar(d: Deck) {
         Pill("‹", Modifier.weight(1f)) { d.loopStep(-1) }
         Pill("⟳ " + loopLabel(d.loopBeats), Modifier.weight(1.6f), on = d.loopOn, color = C.green) { d.toggleLoop() }
         Pill("›", Modifier.weight(1f)) { d.loopStep(1) }
+        Pill("1", Modifier.weight(1f), color = C.yellow, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
     }
 }
 

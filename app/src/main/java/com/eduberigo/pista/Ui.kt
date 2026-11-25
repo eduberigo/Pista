@@ -286,6 +286,7 @@ fun PlayButton(d: Deck, modifier: Modifier = Modifier) {
     Tick.frame.longValue
     val playing = d.playing
     val loaded = d.loaded != null
+    val armed = !d.armAt.isNaN()
     Canvas(
         modifier
             .size(62.dp)
@@ -293,7 +294,7 @@ fun PlayButton(d: Deck, modifier: Modifier = Modifier) {
     ) {
         val r = size.minDimension / 2
         drawCircle(C.btn, r)
-        drawCircle(if (playing) C.green else if (loaded) C.green.copy(alpha = 0.55f) else C.line, r - 2.dp.toPx(), style = Stroke(3.dp.toPx()))
+        drawCircle(if (armed) C.yellow else if (playing) C.green else if (loaded) C.green.copy(alpha = 0.55f) else C.line, r - 2.dp.toPx(), style = Stroke(3.dp.toPx()))
         val c = center
         if (playing) {
             val w = r * 0.16f

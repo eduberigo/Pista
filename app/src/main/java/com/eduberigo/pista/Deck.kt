@@ -76,6 +76,18 @@ class Deck(val index: Int) {
     val groupKnob = FloatArray(3) { 0.5f }
     private val stemMute = BooleanArray(6)
     @Volatile private var seekReq = Double.NaN
+    /** Entrada armada: começa quando o outro deck chegar nesta posição (quadros dele). */
+    @Volatile var armAt = Double.NaN
+
+    /** Só na thread de áudio: começa a tocar já desta posição, sem rampa de busca. */
+    fun startNow(p: Double) {
+        val l = loaded ?: return
+        pos = p.coerceIn(0.0, (l.frames - 4).toDouble())
+        seekReq = Double.NaN
+        fadeSeek = false
+        resetW()
+        playing = true
+    }
 
     val track: Track? get() = loaded?.track
     val bpm: Double get() = loaded?.track?.bpm ?: 0.0

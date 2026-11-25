@@ -63,11 +63,35 @@ class Engine {
 
     // ---------- comandos ----------
 
+    /** Latência de saída medida (s) e compensação do toque na tela (ms, ajustável). */
+    @Volatile var outLatSec = 0.0
+    var touchMs: Int
+        get() = Pista.prefs.getInt("touchMs", 35)
+        set(v) { Pista.prefs.edit().putInt("touchMs", v).apply() }
+
+    /**
+     * Play. Com Q ligado e o outro deck tocando, a entrada cai exatamente na batida que você ouviu:
+     * - tocou logo depois da batida (o normal, por causa do tempo de reação/latência): entra já, adiantado
+     *   o tanto que passou, como se tivesse entrado em cima da batida;
+     * - tocou um pouco antes: fica armado e entra no ponto exato da batida.
+     */
     fun togglePlay(d: Deck) {
-        if (d.loaded == null) return
+        val dl = d.loaded ?: return
         if (d.playing) { d.playing = false; return }
-        val o = decks[1 - d.index]
-        if (d.sync && o.loaded != null && o.playing && leader != d.index) align(d, bar = true)
+        if (!d.armAt.isNaN()) { d.armAt = Double.NaN; return }
+        val m = decks[1 - d.index]
+        val ml = m.loaded
+        if ((quantize || d.sync) && ml != null && m.playing && ml.track.bpm > 0 && dl.track.bpm > 0) {
+            val perM = ml.track.period * SR
+            val ancM = ml.track.anchor * SR
+            val lagFrames = (outLatSec + touchMs / 1000.0) * SR * m.rate
+            val heard = m.pos - lagFrames
+            val b = (heard - ancM) / perM
+            val boundary = ancM + kotlin.math.round(b) * perM
+            // o motor calcula na amostra exata: se a batida já passou, entra adiantado; se não, espera por ela
+            d.armAt = boundary
+            return
+        }
         d.playing = true
     }
 
@@ -202,6 +226,8 @@ class Engine {
         var bufFrames = BLOCK * 2
         runCatching { track.setBufferSizeInFrames(bufFrames) }
         var lastUnder = track.underrunCount
+        var written = 0L
+        val ts = android.media.AudioTimestamp()
         var checkAt = System.nanoTime() + 500_000_000L
         track.play()
         val n = BLOCK
@@ -223,6 +249,7 @@ class Engine {
                     }
                     d.rate = base * (1.0 + d.bend)
                 }
+                applyArms(n, rate)
                 decks[0].render(aL, aR, n, rate)
                 decks[1].render(bL, bR, n, rate)
                 val blockSec = n.toFloat() / rate
@@ -298,8 +325,16 @@ class Engine {
                 peakL = pkL; peakR = pkR
                 val w = track.write(out, 0, n * ch, AudioTrack.WRITE_BLOCKING)
                 if (w < 0) break
+                written += n
                 if (now > checkAt) {
                     checkAt = now + 500_000_000L
+                    // latência real até o alto-falante/fone (inclui Bluetooth quando o aparelho informa)
+                    if (track.getTimestamp(ts)) {
+                        val t = System.nanoTime()
+                        val presented = ts.framePosition + (t - ts.nanoTime) * rate / 1e9
+                        val lat = (written - presented) / rate
+                        if (lat in 0.0..0.6) outLatSec = lat
+                    }
                     val u = track.underrunCount
                     if (u > lastUnder && bufFrames < track.bufferCapacityInFrames) {
                         bufFrames = minOf(track.bufferCapacityInFrames, bufFrames + BLOCK)
@@ -313,6 +348,28 @@ class Engine {
             runCatching { track.stop() }
             track.release()
         }
+    }
+
+    /** Entradas armadas (play com Q): começa o deck na amostra exata da batida do outro deck. */
+    fun applyArms(n: Int, rate: Int) {
+    for (d in decks) {
+        val a = d.armAt
+        if (!a.isNaN()) {
+            val m = decks[1 - d.index]
+            if (!m.playing) {
+                d.armAt = Double.NaN
+            } else {
+                val advM = SR.toDouble() / rate * m.rate
+                val k = (a - m.pos) / advM
+                if (k < n) {
+                    // k = amostra deste bloco em que cai a batida (negativo = já passou: entra adiantado)
+                    val kk = k
+                    d.armAt = Double.NaN
+                    d.startNow(d.pos - kk * (SR.toDouble() / rate * d.rate))
+                }
+            }
+        }
+    }
     }
 
     private fun clip(x: Float): Float {

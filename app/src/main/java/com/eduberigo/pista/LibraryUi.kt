@@ -474,9 +474,16 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit, onBackup: (Boo
             )
             val os = e.outStatus.value
             if (os.isNotEmpty()) Text(os, color = C.yellow, fontSize = 12.sp)
+            LatencyInfo()
+            var touch by remember { mutableIntStateOf(e.touchMs) }
+            Text("Compensação do toque na tela: $touch ms", color = C.txt, fontSize = 13.sp)
+            androidx.compose.material3.Slider(
+                value = touch.toFloat(), onValueChange = { touch = it.toInt(); e.touchMs = touch }, valueRange = 0f..150f,
+            )
             Text(
-                "Buffer do app: ${e.latencyMs} ms (cresce sozinho se o áudio falhar). Fone Bluetooth soma 150–300 ms que o app não controla.",
-                color = C.dim, fontSize = 12.sp,
+                "Com Q ligado, o play cai na batida que você ouviu no outro deck: o app desconta a latência medida + esta compensação. " +
+                    "Se a entrada ficar atrasada, aumente; se adiantada, diminua.",
+                color = C.dim, fontSize = 11.sp,
             )
 
             Head("CROSSFADER")
@@ -570,4 +577,15 @@ fun FolderPicker(title: String, button: String, start: String, onPick: (File) ->
             }
         }
     }
+}
+
+@Composable
+private fun LatencyInfo() {
+    Tick.frame.longValue
+    val e = Pista.engine
+    Text(
+        "Latência medida até o som: ${(e.outLatSec * 1000).toInt()} ms (buffer do app ${e.latencyMs} ms). " +
+            "Bluetooth costuma somar 150–300 ms.",
+        color = C.dim, fontSize = 12.sp,
+    )
 }
