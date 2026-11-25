@@ -113,12 +113,19 @@ private fun DeckHeader(d: Deck, left: Boolean, modifier: Modifier, onOpen: () ->
 private fun HeaderStatus(d: Deck) {
     val t = d.ui.track
     val st = d.ui.status
+    val ready = d.ui.stemsReady
     val cur = Processor.currentId
     val p = Processor.progress.floatValue
     val s = Processor.status.value
+    val det = Processor.detail.value
+    Pista.library.version.intValue
     val text = when {
         st.isNotEmpty() -> st
-        t != null && cur == t.id && s.startsWith("Separando") -> "Separando faixas ${(p * 100).toInt()}%"
+        t == null || ready || t.stems -> ""
+        cur == t.id && s == "Em espera" -> "Faixas em espera: $det"
+        cur == t.id -> "$s ${(p * 100).toInt()}%"
+        s.startsWith("Baixando") -> "Baixando o modelo ${(p * 100).toInt()}%"
+        Processor.isQueued(t.id) -> "Faixas: na fila (${s.lowercase()})"
         else -> ""
     }
     if (text.isNotEmpty()) Text(text, color = C.yellow, fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -58,7 +58,6 @@ object DeckLoader {
                 if (t.stems && Pista.library.stemsDir(t).isDirectory) {
                     loadStemsNow(ctx, d, t, g)
                 } else if (Processor.autoSeparate) {
-                    post(d) { status = "Faixas: na fila de separação" }
                     Processor.request(ctx, t)
                 }
             } catch (e: InterruptedException) {
