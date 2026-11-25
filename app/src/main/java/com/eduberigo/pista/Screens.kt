@@ -333,7 +333,18 @@ private fun StemColumn(d: Deck, modifier: Modifier) {
             Pill("BAT", Modifier.weight(1f), on = d.groupMuted(mask, 1), color = C.red, fontSize = 10) { d.toggleGroup(1) }
             Pill("HARM", Modifier.weight(1f), on = d.groupMuted(mask, 2), color = C.red, fontSize = 10) { d.toggleGroup(2) }
         }
-        Text("knob = gradual · botão aceso = cortado", color = C.dim, fontSize = 9.sp)
+        var kb by remember { mutableFloatStateOf(d.killBeats) }
+        Text("BOTÕES SOMEM EM:", color = C.dim, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+            for ((b, nm) in listOf(0f to "seco", 1f to "1 t", 4f to "1 c", 8f to "2 c")) {
+                Pill(nm, Modifier.weight(1f), on = kb == b, fontSize = 10) {
+                    kb = b
+                    for (x in Pista.engine.decks) x.killBeats = b
+                    Pista.prefs.edit().putFloat("killBeats", b).apply()
+                }
+            }
+        }
+        Text("knobs = volume à mão · botões = some/volta em rampa (t = tempo, c = compasso, no BPM da música)", color = C.dim, fontSize = 9.sp)
         if (ready) {
             Text("FAIXA POR FAIXA (role para baixo)", color = C.dim, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             for (row in 0 until 3) {

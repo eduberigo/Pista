@@ -74,6 +74,8 @@ class Deck(val index: Int) {
     val stemKnob = FloatArray(6) { 0.5f }
     /** Knobs de grupo: 0 = voz, 1 = bateria, 2 = harmonia (baixo, guitarra, piano, outros). */
     val groupKnob = FloatArray(3) { 0.5f }
+    /** Duração do corte dos botões VOZ/BAT/HARM em batidas (0 = seco). */
+    @Volatile var killBeats = Pista.prefs.getFloat("killBeats", 4f)
     private val stemMute = BooleanArray(6)
     @Volatile private var seekReq = Double.NaN
     /** Entrada armada: começa quando o outro deck chegar nesta posição (quadros dele). */
@@ -426,6 +428,7 @@ class Deck(val index: Int) {
     private val curG = FloatArray(6) { 1f }
     private val newG = FloatArray(6)
     private val smG = FloatArray(6) { 1f }
+    private val muteLvl = FloatArray(6) { 1f }
     private var sGl = 1f; private var sGm = 1f; private var sGh = 1f; private var sTrim = 1f
     private val bL = FloatArray(MAXB)
     private val bR = FloatArray(MAXB)
@@ -502,7 +505,14 @@ class Deck(val index: Int) {
         var any = false
         for (k in 0 until 6) {
             val grp = if (k < 2) k else 2
-            val tgt = if (stemMute[k]) 0f else stemGain(stemKnob[k]) * stemGain(groupKnob[grp])
+            // botões VOZ/BAT/HARM: some/volta numa rampa do tamanho escolhido (seco, 1 tempo, 1 ou 2 compassos)
+            val fadeSec = if (killBeats <= 0f) 0.0 else killBeats * (loaded?.track?.period ?: 0.5) / rate
+            val mTgt = if (stemMute[k]) 0f else 1f
+            muteLvl[k] = if (fadeSec <= 0.0) mTgt else {
+                val step = (blockSec / fadeSec).toFloat()
+                if (muteLvl[k] < mTgt) minOf(mTgt, muteLvl[k] + step) else maxOf(mTgt, muteLvl[k] - step)
+            }
+            val tgt = muteLvl[k] * stemGain(stemKnob[k]) * stemGain(groupKnob[grp])
             var g = smG[k] + (tgt - smG[k]) * aSt
             if (abs(tgt - g) < 0.002f) g = tgt
             smG[k] = g
