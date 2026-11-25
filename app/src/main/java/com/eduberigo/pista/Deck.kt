@@ -72,6 +72,8 @@ class Deck(val index: Int) {
     @Volatile var peak = 0f
     /** Posição dos knobs das faixas (0..1, centro 0.5 = volume normal). */
     val stemKnob = FloatArray(6) { 0.5f }
+    /** Knobs de grupo: 0 = voz, 1 = bateria, 2 = harmonia (baixo, guitarra, piano, outros). */
+    val groupKnob = FloatArray(3) { 0.5f }
     private val stemMute = BooleanArray(6)
     @Volatile private var seekReq = Double.NaN
 
@@ -351,6 +353,7 @@ class Deck(val index: Int) {
 
     fun resetStems() {
         for (k in 0 until 6) { stemKnob[k] = 0.5f; stemMute[k] = false }
+        for (g in 0 until 3) groupKnob[g] = 0.5f
         ui.muteMask = 0
     }
 
@@ -448,7 +451,8 @@ class Deck(val index: Int) {
         val aSt = 1f - kotlin.math.exp(-blockSec / 0.12f)
         var any = false
         for (k in 0 until 6) {
-            val tgt = if (stemMute[k]) 0f else stemGain(stemKnob[k])
+            val grp = if (k < 2) k else 2
+            val tgt = if (stemMute[k]) 0f else stemGain(stemKnob[k]) * stemGain(groupKnob[grp])
             var g = smG[k] + (tgt - smG[k]) * aSt
             if (abs(tgt - g) < 0.002f) g = tgt
             smG[k] = g

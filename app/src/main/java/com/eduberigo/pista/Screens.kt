@@ -283,19 +283,28 @@ private fun StemColumn(d: Deck, modifier: Modifier) {
     val mask = d.ui.muteMask
     var resetKey by remember { mutableIntStateOf(0) }
     val col = C.deck(d.index)
+    val key = resetKey to d.ui.track?.id
     Column(
         modifier.fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.panel).padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("DECK ${d.index + 1}", color = col, fontSize = 12.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(6.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Pill("VOZ", Modifier.weight(1f), on = d.groupMuted(mask, 0), color = C.red, enabled = ready, fontSize = 11) { d.toggleGroup(0) }
-            Pill("BAT", Modifier.weight(1f), on = d.groupMuted(mask, 1), color = C.red, enabled = ready, fontSize = 11) { d.toggleGroup(1) }
-            Pill("HARM", Modifier.weight(1f), on = d.groupMuted(mask, 2), color = C.red, enabled = ready, fontSize = 11) { d.toggleGroup(2) }
+        // volume gradual de cada grupo (centro = normal, esquerda = some, direita = reforça)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            DKnob("VOZ", d.groupKnob[0], { d.groupKnob[0] = it }, key = key, color = col, size = 46.dp)
+            DKnob("BATERIA", d.groupKnob[1], { d.groupKnob[1] = it }, key = key, color = col, size = 46.dp)
+            DKnob("HARMONIA", d.groupKnob[2], { d.groupKnob[2] = it }, key = key, color = col, size = 46.dp)
         }
-        Text("aceso = cortado", color = C.dim, fontSize = 9.sp)
+        Spacer(Modifier.height(4.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("VOZ", Modifier.weight(1f), on = d.groupMuted(mask, 0), color = C.red, fontSize = 10) { d.toggleGroup(0) }
+            Pill("BAT", Modifier.weight(1f), on = d.groupMuted(mask, 1), color = C.red, fontSize = 10) { d.toggleGroup(1) }
+            Pill("HARM", Modifier.weight(1f), on = d.groupMuted(mask, 2), color = C.red, fontSize = 10) { d.toggleGroup(2) }
+        }
+        Text("knob = gradual · botão aceso = cortado", color = C.dim, fontSize = 9.sp)
         if (ready) {
+            Text("FAIXA POR FAIXA", color = C.dim, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
             for (row in 0 until 3) {
                 Row(
                     Modifier.fillMaxWidth().weight(1f),
@@ -304,7 +313,7 @@ private fun StemColumn(d: Deck, modifier: Modifier) {
                 ) {
                     for (c in 0 until 2) {
                         val k = row * 2 + c
-                        DKnob(Separator.LABELS[k], d.stemKnob[k], { d.setStemKnob(k, it) }, key = resetKey to d.ui.track?.id, color = col, size = 48.dp)
+                        DKnob(Separator.LABELS[k], d.stemKnob[k], { d.setStemKnob(k, it) }, key = key, color = col, size = 40.dp)
                     }
                 }
             }
@@ -344,7 +353,7 @@ private fun StemsPending(d: Deck, modifier: Modifier) {
                     color = C.dim, fontSize = 13.sp,
                 )
                 Pill("SEPARAR AGORA", Modifier.fillMaxWidth(), fontSize = 11) { Processor.request(ctx, t) }
-                Text("Leva alguns minutos por música. Pausa sozinho enquanto algum deck toca (dá para mudar nos ajustes).", color = C.dim, fontSize = 10.sp)
+                Text("Leva alguns minutos por música. Os knobs acima já ficam valendo e atuam assim que as faixas ficarem prontas.", color = C.dim, fontSize = 10.sp)
             }
         }
     }
