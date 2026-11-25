@@ -32,6 +32,9 @@ class Engine {
     val outStatus = mutableStateOf("")
 
     @Volatile private var running = false
+    private var sx = 0.5f
+    private var sv0 = 1f
+    private var sv1 = 1f
     @Volatile private var restart = false
 
     val isPlaying: Boolean get() = decks[0].playing || decks[1].playing
@@ -216,18 +219,32 @@ class Engine {
                 }
                 decks[0].render(aL, aR, n, rate)
                 decks[1].render(bL, bR, n, rate)
-                val x = xfade
+                val blockSec = n.toFloat() / rate
+                // crossfader e volumes seguem o dedo com ~50 ms de suavização
+                val ax = 1f - kotlin.math.exp(-blockSec / 0.05f)
+                sx += (xfade - sx) * ax
+                sv0 += (decks[0].vol - sv0) * ax
+                sv1 += (decks[1].vol - sv1) * ax
+                val x = sx
                 val g0: Float
                 val g1: Float
-                if (curve == 1) {
-                    g0 = if (x < 0.94f) 1f else ((1f - x) / 0.06f).coerceIn(0f, 1f)
-                    g1 = if (x > 0.06f) 1f else (x / 0.06f).coerceIn(0f, 1f)
-                } else {
-                    g0 = if (x <= 0.5f) 1f else cos((x - 0.5f) * PI).toFloat()
-                    g1 = if (x >= 0.5f) 1f else cos((0.5f - x) * PI).toFloat()
+                when (curve) {
+                    2 -> {
+                        g0 = if (x < 0.94f) 1f else ((1f - x) / 0.06f).coerceIn(0f, 1f)
+                        g1 = if (x > 0.06f) 1f else (x / 0.06f).coerceIn(0f, 1f)
+                    }
+                    1 -> {
+                        g0 = if (x <= 0.5f) 1f else cos((x - 0.5f) * PI).toFloat()
+                        g1 = if (x >= 0.5f) 1f else cos((0.5f - x) * PI).toFloat()
+                    }
+                    else -> {
+                        // potência constante no curso inteiro: uma sobe enquanto a outra desce, sem buraco nem pico no meio
+                        g0 = cos(x * PI / 2).toFloat()
+                        g1 = kotlin.math.sin(x * PI / 2).toFloat()
+                    }
                 }
-                val v0 = decks[0].vol * g0
-                val v1 = decks[1].vol * g1
+                val v0 = sv0 * g0
+                val v1 = sv1 * g1
                 val mv = master
                 val c0 = decks[0].cueHead
                 val c1 = decks[1].cueHead

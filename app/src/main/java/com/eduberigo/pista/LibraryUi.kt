@@ -401,9 +401,19 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit) {
 
             Head("CROSSFADER")
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Pill("Suave", Modifier.weight(1f), on = curve == 0, fontSize = 11) { curve = 0; e.curve = 0; Pista.prefs.edit().putInt("curve", 0).apply() }
-                Pill("Corte rápido", Modifier.weight(1f), on = curve == 1, fontSize = 11) { curve = 1; e.curve = 1; Pista.prefs.edit().putInt("curve", 1).apply() }
+                for ((i, nm) in listOf("Suave", "Média", "Corte rápido").withIndex()) {
+                    Pill(nm, Modifier.weight(1f), on = curve == i, fontSize = 11) { curve = i; e.curve = i; Pista.prefs.edit().putInt("curve", i).apply() }
+                }
             }
+
+            Text(
+                when (curve) {
+                    0 -> "Suave: uma música desce enquanto a outra sobe ao longo de todo o curso. Boa para transições longas."
+                    1 -> "Média: as duas ficam cheias no meio; só cai nas pontas."
+                    else -> "Corte rápido: entra e sai nos últimos milímetros (scratch, cortes)."
+                },
+                color = C.dim, fontSize = 12.sp,
+            )
 
             Head("SOBRE")
             Text(

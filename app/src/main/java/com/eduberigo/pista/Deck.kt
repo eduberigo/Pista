@@ -377,6 +377,8 @@ class Deck(val index: Int) {
     private var curMix = 0f
     private val curG = FloatArray(6) { 1f }
     private val newG = FloatArray(6)
+    private val smG = FloatArray(6) { 1f }
+    private var sGl = 1f; private var sGm = 1f; private var sGh = 1f; private var sTrim = 1f
     private val bL = FloatArray(MAXB)
     private val bR = FloatArray(MAXB)
 
@@ -386,6 +388,7 @@ class Deck(val index: Int) {
     private var eqRate = 0
     private var lastFilter = 0f
     private var filterOn = false
+    private var sFilter = 0f
 
     // WSOLA (andamento sem mudar o tom)
     private val win = FloatArray(GN) { (0.5 - 0.5 * cos(2 * PI * it / GN)).toFloat() }
@@ -440,10 +443,17 @@ class Deck(val index: Int) {
         val target = if (playing && !fadeSeek) 1f else 0f
         if (amp == 0f && target == 0f) { zero(oL, oR, n); peak = 0f; return }
 
+        // faixas: muda suavemente (~120 ms) em vez de cortar seco
+        val blockSec = n.toFloat() / outRate
+        val aSt = 1f - kotlin.math.exp(-blockSec / 0.12f)
         var any = false
         for (k in 0 until 6) {
-            newG[k] = if (stemMute[k]) 0f else stemGain(stemKnob[k])
-            if (newG[k] != 1f) any = true
+            val tgt = if (stemMute[k]) 0f else stemGain(stemKnob[k])
+            var g = smG[k] + (tgt - smG[k]) * aSt
+            if (abs(tgt - g) < 0.002f) g = tgt
+            smG[k] = g
+            newG[k] = g
+            if (g != 1f) any = true
         }
         val mixT = if (l.stems != null && any) 1f else 0f
         val srcRatio = SR.toDouble() / outRate
@@ -460,8 +470,10 @@ class Deck(val index: Int) {
         System.arraycopy(newG, 0, curG, 0, 6)
         curMix = mixT
 
-        // filtro
-        val f = filter
+        // filtro (valor suavizado para não dar degraus)
+        sFilter += (filter - sFilter) * (1f - kotlin.math.exp(-blockSec / 0.05f))
+        if (abs(filter - sFilter) < 0.002f) sFilter = filter
+        val f = sFilter
         if (f != lastFilter || !filterOn) {
             val on = abs(f) > 0.03f
             if (on) {
@@ -474,12 +486,22 @@ class Deck(val index: Int) {
             lastFilter = f
         }
 
-        val g = l.track.gain * Dsp.db((trim - 0.5f) * 24f)
-        val gl = eqGain(eqLow); val gm = eqGain(eqMid); val gh = eqGain(eqHi)
+        // EQ e ganho: seguem o knob com ~40 ms de suavização, rampa dentro do bloco
+        val aEq = 1f - kotlin.math.exp(-blockSec / 0.04f)
+        val pGl = sGl; val pGm = sGm; val pGh = sGh; val pTr = sTrim
+        sGl += (eqGain(eqLow) - sGl) * aEq
+        sGm += (eqGain(eqMid) - sGm) * aEq
+        sGh += (eqGain(eqHi) - sGh) * aEq
+        sTrim += (l.track.gain * Dsp.db((trim - 0.5f) * 24f) - sTrim) * aEq
         val a0 = amp
         var pk = 0f
         for (i in 0 until n) {
-            val ramp = a0 + (target - a0) * (i + 1) / n
+            val fr = (i + 1f) / n
+            val ramp = a0 + (target - a0) * fr
+            val g = pTr + (sTrim - pTr) * fr
+            val gl = pGl + (sGl - pGl) * fr
+            val gm = pGm + (sGm - pGm) * fr
+            val gh = pGh + (sGh - pGh) * fr
             val xl = bL[i] * g
             val xr = bR[i] * g
             val lowL = lp2.l(lp1.l(xl)); val lowR = lp2.r(lp1.r(xr))

@@ -15,6 +15,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -154,7 +156,7 @@ fun DeckWave(d: Deck, modifier: Modifier = Modifier) {
                     if (down) {
                         drawLine(C.yellow.copy(alpha = 0.85f), Offset(0f, y), Offset(w, y), 2.5f)
                         val bar = Math.floorDiv(k, 4L) + 1
-                        drawText(tm, "$bar", Offset(4f, y + 2f), labelStyle)
+                        safeText(tm, "$bar", 4f, y + 2f, labelStyle)
                     } else {
                         drawLine(Color.White.copy(alpha = 0.22f), Offset(0f, y), Offset(w, y), 1f)
                     }
@@ -170,7 +172,7 @@ fun DeckWave(d: Deck, modifier: Modifier = Modifier) {
                     val y = (h / 2 + (hc - pos) / secPerPx).toFloat()
                     if (y in 0f..h) {
                         drawLine(C.hot[i], Offset(w * 0.82f, y), Offset(w, y), 4f)
-                        drawText(tm, "${i + 1}", Offset(w - 16f, y + 2f), TextStyle(color = C.hot[i], fontSize = 11.sp))
+                        safeText(tm, "${i + 1}", w - 16f, y + 2f, TextStyle(color = C.hot[i], fontSize = 11.sp))
                     }
                 }
             }
@@ -178,4 +180,12 @@ fun DeckWave(d: Deck, modifier: Modifier = Modifier) {
             drawLine(C.red, Offset(0f, h / 2), Offset(w, h / 2), 2.dp.toPx())
         }
     }
+}
+
+/** drawText quebra o app se o texto começar fora da área; aqui só desenha o que cabe, com tamanho fixo. */
+private fun DrawScope.safeText(tm: TextMeasurer, text: String, x: Float, y: Float, style: TextStyle) {
+    val w = 40f
+    val h = 34f
+    if (x < 0f || y < 0f || x + w > size.width || y + h > size.height) return
+    drawText(tm, text, Offset(x, y), style, size = Size(w, h))
 }

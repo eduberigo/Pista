@@ -75,6 +75,16 @@ object Processor {
     fun run(ctx: Context) {
         Pista.main.post { active.value = true }
         try {
+            if (autoSeparate && !Separator.modelReady()) {
+                try {
+                    ui("Baixando o modelo de separação", "136 MB, uma única vez", 0f)
+                    Separator.ensureModel({ p -> ui("Baixando o modelo de separação", "136 MB, uma única vez", p) }) { stopFlag }
+                } catch (e: InterruptedException) {
+                } catch (e: Throwable) {
+                    ui("Falha ao baixar o modelo", e.message ?: "erro de rede", 0f)
+                    Thread.sleep(4000)
+                }
+            }
             while (!stopFlag) {
                 val job = next() ?: break
                 val (t, sep, prio) = job
@@ -135,7 +145,9 @@ object Processor {
             val frames = Codec.decode(t.path, tmp) { stopFlag }
             val pcm = Codec.map(tmp)
             if (!t.analyzed) {
-                ui("Analisando BPM e tom", title, 0f)
+                val all = Pista.library.snapshot()
+                val left = all.count { !it.analyzed }
+                ui("Analisando BPM e tom — faltam $left", title, (all.size - left).toFloat() / maxOf(1, all.size))
                 Work.analyze(t, pcm, frames, { stopFlag })
             }
             if (sep && !t.stems) {
