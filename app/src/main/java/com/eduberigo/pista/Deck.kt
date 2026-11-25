@@ -418,8 +418,11 @@ class Deck(val index: Int) {
     private val bL = FloatArray(MAXB)
     private val bR = FloatArray(MAXB)
 
-    private val lp1 = Biquad(); private val lp2 = Biquad()
-    private val hp1 = Biquad(); private val hp2 = Biquad()
+    // EQ de 3 bandas com cruzamentos Linkwitz-Riley (24 dB/oitava) em 250 Hz e 3,5 kHz
+    private val lo1 = Biquad(); private val lo2 = Biquad()
+    private val up1 = Biquad(); private val up2 = Biquad()
+    private val md1 = Biquad(); private val md2 = Biquad()
+    private val hi1 = Biquad(); private val hi2 = Biquad()
     private val flt = Biquad()
     private var eqRate = 0
     private var lastFilter = 0f
@@ -450,8 +453,10 @@ class Deck(val index: Int) {
     private fun setupEq(rate: Int) {
         eqRate = rate
         val fs = rate.toDouble()
-        lp1.lowpass(250.0, 0.7071, fs); lp2.lowpass(250.0, 0.7071, fs)
-        hp1.highpass(3500.0, 0.7071, fs); hp2.highpass(3500.0, 0.7071, fs)
+        lo1.lowpass(250.0, 0.7071, fs); lo2.lowpass(250.0, 0.7071, fs)
+        up1.highpass(250.0, 0.7071, fs); up2.highpass(250.0, 0.7071, fs)
+        md1.lowpass(3500.0, 0.7071, fs); md2.lowpass(3500.0, 0.7071, fs)
+        hi1.highpass(3500.0, 0.7071, fs); hi2.highpass(3500.0, 0.7071, fs)
     }
 
     private fun eqGain(k: Float): Float =
@@ -541,10 +546,13 @@ class Deck(val index: Int) {
             val gh = pGh + (sGh - pGh) * fr
             val xl = bL[i] * g
             val xr = bR[i] * g
-            val lowL = lp2.l(lp1.l(xl)); val lowR = lp2.r(lp1.r(xr))
-            val hiL = hp2.l(hp1.l(xl)); val hiR = hp2.r(hp1.r(xr))
-            var yl = lowL * gl + (xl - lowL - hiL) * gm + hiL * gh
-            var yr = lowR * gl + (xr - lowR - hiR) * gm + hiR * gh
+            // bandas separadas de verdade (a versão anterior deixava o grave vazar na banda média)
+            val lowL = lo2.l(lo1.l(xl)); val lowR = lo2.r(lo1.r(xr))
+            val upL = up2.l(up1.l(xl)); val upR = up2.r(up1.r(xr))
+            val midL = md2.l(md1.l(upL)); val midR = md2.r(md1.r(upR))
+            val hiL = hi2.l(hi1.l(upL)); val hiR = hi2.r(hi1.r(upR))
+            var yl = lowL * gl + midL * gm + hiL * gh
+            var yr = lowR * gl + midR * gm + hiR * gh
             if (filterOn) { yl = flt.l(yl); yr = flt.r(yr) }
             yl *= ramp; yr *= ramp
             oL[i] = yl; oR[i] = yr
