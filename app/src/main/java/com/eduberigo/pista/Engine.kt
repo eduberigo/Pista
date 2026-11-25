@@ -95,6 +95,10 @@ class Engine {
         d.playing = true
     }
 
+    /**
+     * SYNC: só um deck fica aceso por vez — o que está seguindo. O outro é o MASTER (manda no andamento).
+     * Ligar o SYNC do outro lado inverte os papéis.
+     */
     fun toggleSync(d: Deck) {
         if (d.sync) {
             d.pitch = (d.rate - 1.0).coerceIn(-0.5, 0.5)
@@ -102,14 +106,16 @@ class Engine {
             return
         }
         val o = decks[1 - d.index]
+        if (o.sync) {
+            // o outro deixa de seguir e passa a mandar, no andamento em que já estava
+            o.pitch = (o.rate - 1.0).coerceIn(-0.5, 0.5)
+            o.sync = false
+        }
+        leader = o.index
+        d.sync = true
         if (o.loaded != null && o.bpm > 0) {
-            leader = o.index
-            d.sync = true
             if (o.playing && d.playing) align(d, bar = false)
             else if (o.playing) align(d, bar = true)
-        } else {
-            leader = d.index
-            d.sync = true
         }
     }
 

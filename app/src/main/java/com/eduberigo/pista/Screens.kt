@@ -565,6 +565,13 @@ private fun BpmBox(d: Deck, modifier: Modifier, left: Boolean, onClick: () -> Un
             (if (abs(pct) < 0.05) "BPM" else "BPM  %+.1f%%".format(pct)) + if (d.keylock) "  🔒" else "",
             color = C.dim, fontSize = 10.sp,
         )
+        // quem manda no andamento quando o outro lado está em SYNC
+        if (Pista.engine.decks[1 - d.index].sync) {
+            Text(
+                "MASTER", color = Color.Black, fontSize = 10.sp, fontWeight = FontWeight.Bold,
+                modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(C.deck(d.index)).padding(horizontal = 5.dp),
+            )
+        }
     }
 }
 
