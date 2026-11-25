@@ -31,6 +31,8 @@ class Track(val id: String, var path: String) {
     var plays = 0
     var lastPlayed = 0L
     var error: String? = null
+    /** Não está na pasta atual (fica guardada com tudo para quando voltar). */
+    var missing = false
 
     val name: String get() = title.ifBlank { File(path).nameWithoutExtension }
     val period: Double get() = if (bpm > 0) 60.0 / bpm else 0.5
@@ -46,6 +48,7 @@ class Track(val id: String, var path: String) {
         put("hot", JSONArray().apply { hotcues.forEach { put(fin(it)) } })
         put("plays", plays); put("last", lastPlayed)
         error?.let { put("err", it) }
+        put("miss", missing)
     }
 
     private fun fin(v: Double) = if (v.isNaN() || v.isInfinite()) 0.0 else v
@@ -77,6 +80,7 @@ class Track(val id: String, var path: String) {
             plays = o.optInt("plays")
             lastPlayed = o.optLong("last")
             error = if (o.has("err")) o.optString("err") else null
+            missing = o.optBoolean("miss")
         }
     }
 }

@@ -93,11 +93,28 @@ fun PermissionScreen(onAsk: () -> Unit) {
 fun Root() {
     var screen by remember { mutableIntStateOf(0) }
     var libDeck by remember { mutableIntStateOf(0) }
-    BackHandler(enabled = screen != 0) { screen = if (screen == 3) 2 else 0 }
+    var withStems by remember { mutableStateOf(true) }
+    BackHandler(enabled = screen != 0) { screen = if (screen >= 3) 2 else 0 }
     when (screen) {
         1 -> LibraryScreen(libDeck, onClose = { screen = 0 }, onSettings = { screen = 2 })
-        2 -> SettingsScreen(onClose = { screen = 0 }, onPickFolder = { screen = 3 })
-        3 -> FolderPicker(onDone = { screen = 2 })
+        2 -> SettingsScreen(
+            onClose = { screen = 0 },
+            onPickFolder = { screen = 3 },
+            onBackup = { withStems = it; screen = 4 },
+            onRestore = { screen = 5 },
+        )
+        3 -> FolderPicker(
+            "Pasta das músicas", "USAR ESTA PASTA", Pista.library.root,
+            onPick = { Pista.library.setRoot(it.path); screen = 2 }, onCancel = { screen = 2 },
+        )
+        4 -> FolderPicker(
+            "Onde guardar o backup (cria a pasta Pista-backup)", "FAZER BACKUP AQUI", "",
+            onPick = { Backup.backupTo(it, withStems); screen = 2 }, onCancel = { screen = 2 },
+        )
+        5 -> FolderPicker(
+            "Pasta do backup (Pista-backup ou a pasta Pista copiada)", "RESTAURAR DESTA PASTA", "",
+            onPick = { Backup.restoreFrom(it) { screen = 3 }; screen = 2 }, onCancel = { screen = 2 },
+        )
         else -> MainScreen(
             openLib = { libDeck = it; screen = 1 },
             openSettings = { screen = 2 },

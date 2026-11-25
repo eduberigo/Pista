@@ -26,7 +26,8 @@ class Library {
     fun waveFile(t: Track) = File(dataDir(t), "onda.bin")
     private fun indexFile() = File(Pista.baseDir, "biblioteca.json")
 
-    fun snapshot(): List<Track> = synchronized(lock) { ArrayList(tracks) }
+    /** Só as músicas que existem agora na pasta escolhida. */
+    fun snapshot(): List<Track> = synchronized(lock) { tracks.filter { !it.missing } }
     fun get(id: String): Track? = synchronized(lock) { byId[id] }
     fun size(): Int = synchronized(lock) { tracks.size }
 
@@ -75,9 +76,26 @@ class Library {
         }
     }
 
+    fun saveNow() { writeIndex() }
+
+    /** Relê o biblioteca.json do disco (depois de restaurar um backup). */
+    fun reloadIndex() {
+        val f = indexFile()
+        val a = runCatching { JSONArray(f.readText()) }.getOrNull() ?: return
+        synchronized(lock) {
+            tracks.clear(); byId.clear()
+            for (i in 0 until a.length()) {
+                val t = Track.fromJson(a.getJSONObject(i))
+                t.missing = !File(t.path).exists()
+                tracks.add(t); byId[t.id] = t
+            }
+        }
+        bump()
+    }
+
     private fun writeIndex() {
         val a = JSONArray()
-        for (t in snapshot()) a.put(t.toJson())
+        for (t in synchronized(lock) { ArrayList(tracks) }) a.put(t.toJson())
         val f = indexFile()
         f.parentFile?.mkdirs()
         val tmp = File(f.path + ".tmp")
@@ -108,6 +126,7 @@ class Library {
             n++
             if (ex != null) {
                 if (ex.path != f.path) ex.path = f.path
+                ex.missing = false
                 continue
             }
             val t = Track(id, f.path)
@@ -127,8 +146,8 @@ class Library {
         }
         runCatching { mmr.release() }
         synchronized(lock) {
-            tracks.removeAll { it.id !in seen }
-            byId.keys.retainAll(seen)
+            // não apaga: guarda análise, cues e faixas separadas para quando a música reaparecer
+            for (t in tracks) t.missing = t.id !in seen
         }
         writeIndex()
         status("")

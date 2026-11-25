@@ -369,7 +369,7 @@ private fun TrackRow(t: Track, refKey: Int?, info: String?, onTap: () -> Unit, o
 // ---------------- AJUSTES ----------------
 
 @Composable
-fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit) {
+fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit, onBackup: (Boolean) -> Unit, onRestore: () -> Unit) {
     val ctx = LocalContext.current
     val lib = Pista.library
     val e = Pista.engine
@@ -403,6 +403,30 @@ fun SettingsScreen(onClose: () -> Unit, onPickFolder: () -> Unit) {
                 if (sc.isNotEmpty()) sc else "${all.size} músicas · ${all.count { it.analyzed }} analisadas · ${all.count { it.stems }} com faixas separadas",
                 color = C.dim, fontSize = 12.sp,
             )
+
+            Head("BACKUP E TROCA DE CELULAR")
+            var withStems by remember { mutableStateOf(true) }
+            androidx.compose.runtime.LaunchedEffect(Unit) { Backup.measure() }
+            Text(
+                "Guarda análises, BPM, grades, cues, hot cues e as faixas separadas (para não precisar separar de novo). " +
+                    "As músicas não entram: copie as pastas delas você mesmo. No celular novo: restaure o backup e aponte a pasta das músicas; " +
+                    "o app reconhece cada música pelo nome do arquivo e tamanho, mesmo em outra pasta.",
+                color = C.dim, fontSize = 12.sp,
+            )
+            Toggle("Incluir faixas separadas", Backup.sizeInfo.value.ifEmpty { "Calculando tamanho…" }, withStems) { withStems = it }
+            val bRun = Backup.running.value
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Pill("FAZER BACKUP EM…", Modifier.weight(1f), enabled = !bRun, fontSize = 11) { onBackup(withStems) }
+                Pill("RESTAURAR DE…", Modifier.weight(1f), enabled = !bRun, fontSize = 11) { onRestore() }
+            }
+            val bs = Backup.status.value
+            if (bs.isNotEmpty()) Text(bs, color = if (bRun) C.txt else C.green, fontSize = 12.sp)
+            if (bRun) {
+                val bp = Backup.progress.floatValue
+                LinearProgressIndicator(progress = { bp }, modifier = Modifier.fillMaxWidth())
+                Pill("INTERROMPER", Modifier.fillMaxWidth(), fontSize = 11) { Backup.cancel() }
+            }
+            Text("Dica: o backup copia só o que mudou; da segunda vez em diante é rápido. Pode ir para um SSD/pendrive USB-C.", color = C.dim, fontSize = 11.sp)
 
             Head("PROCESSAMENTO")
             val active = Processor.active.value
@@ -498,33 +522,43 @@ private fun Toggle(title: String, sub: String, checked: Boolean, onChange: (Bool
     }
 }
 
+/** Escolher pasta. [title] diz para quê; [onPick] recebe a pasta escolhida. */
 @Composable
-fun FolderPicker(onDone: () -> Unit) {
-    val start = Pista.library.root.ifEmpty { Environment.getExternalStorageDirectory().path }
-    var dir by remember { mutableStateOf(File(start).takeIf { it.isDirectory } ?: Environment.getExternalStorageDirectory()) }
+fun FolderPicker(title: String, button: String, start: String, onPick: (File) -> Unit, onCancel: () -> Unit) {
+    val ctx = LocalContext.current
+    val vols = remember { Backup.volumes(ctx) }
+    val first = start.ifEmpty { Environment.getExternalStorageDirectory().path }
+    var dir by remember { mutableStateOf(File(first).takeIf { it.isDirectory } ?: Environment.getExternalStorageDirectory()) }
     val subs = remember(dir) {
         (dir.listFiles() ?: emptyArray()).filter { it.isDirectory && !it.name.startsWith(".") }.sortedBy { it.name.lowercase() }
     }
     val audioHere = remember(dir) {
         (dir.listFiles() ?: emptyArray()).count { it.isFile && it.extension.lowercase() in Library.EXT }
     }
+    val atVolumeRoot = vols.any { it.second.path == dir.path }
     Column(Modifier.fillMaxSize()) {
         Row(
             Modifier.fillMaxWidth().background(C.panel2).padding(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            Pill("‹ Voltar", fontSize = 12) { onDone() }
-            Pill("↑ Acima", fontSize = 12, enabled = dir.parentFile?.canRead() == true) {
+            Pill("‹ Voltar", fontSize = 12) { onCancel() }
+            Pill("↑ Acima", fontSize = 12, enabled = !atVolumeRoot && dir.parentFile?.canRead() == true) {
                 dir.parentFile?.let { dir = it }
+            }
+            Text(title, color = C.dim, fontSize = 12.sp, maxLines = 2, modifier = Modifier.weight(1f))
+        }
+        if (vols.size > 1) {
+            Row(
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                for ((name, root) in vols) Pill(name, on = dir.path.startsWith(root.path), fontSize = 11) { dir = root }
             }
         }
         Text(dir.path, color = C.txt, fontSize = 13.sp, modifier = Modifier.padding(10.dp))
-        Text("$audioHere músicas nesta pasta (as subpastas também entram)", color = C.dim, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp))
-        Pill("USAR ESTA PASTA", Modifier.fillMaxWidth().padding(10.dp), on = true) {
-            Pista.library.setRoot(dir.path)
-            onDone()
-        }
+        if (audioHere > 0) Text("$audioHere músicas nesta pasta (as subpastas também entram)", color = C.dim, fontSize = 11.sp, modifier = Modifier.padding(horizontal = 10.dp))
+        Pill(button, Modifier.fillMaxWidth().padding(10.dp), on = true) { onPick(dir) }
         LazyColumn(Modifier.weight(1f)) {
             items(subs, key = { it.path }) { f ->
                 Text(
