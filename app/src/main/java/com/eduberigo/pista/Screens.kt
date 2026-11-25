@@ -165,7 +165,7 @@ private fun HeaderLive(d: Deck, left: Boolean) {
 
 @Composable
 private fun TabBar(tab: Int, onTab: (Int) -> Unit, openSettings: () -> Unit) {
-    val names = listOf("MIXER", "FAIXAS", "ONDAS", "PADS")
+    val names = listOf("MIXER", "STEMS", "ONDAS", "CUES")
     Row(
         Modifier.fillMaxWidth().background(C.panel2).padding(horizontal = 6.dp, vertical = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -282,24 +282,52 @@ private fun StemsTab() {
 
 @Composable
 private fun StemColumn(d: Deck, modifier: Modifier) {
+    val ctx = LocalContext.current
     val ready = d.ui.stemsReady
     val mask = d.ui.muteMask
+    d.ui.edits
     var resetKey by remember { mutableIntStateOf(0) }
     val col = C.deck(d.index)
     val key = resetKey to d.ui.track?.id
     Column(
-        modifier.fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.panel).padding(8.dp),
+        modifier.fillMaxHeight().clip(RoundedCornerShape(12.dp)).background(C.panel)
+            .verticalScroll(rememberScrollState()).padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Text("DECK ${d.index + 1}", color = col, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-        // volume gradual de cada grupo (centro = normal, esquerda = some, direita = reforça)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            DKnob("VOZ", d.groupKnob[0], { d.groupKnob[0] = it }, key = key, color = col, size = 46.dp)
-            DKnob("BATERIA", d.groupKnob[1], { d.groupKnob[1] = it }, key = key, color = col, size = 46.dp)
-            DKnob("HARMONIA", d.groupKnob[2], { d.groupKnob[2] = it }, key = key, color = col, size = 46.dp)
+
+        // ---- BPM e grade ----
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("TAP", Modifier.weight(1.4f).height(44.dp), fontSize = 15) { d.tap() }
+            Pill("÷2", Modifier.weight(1f).height(44.dp), fontSize = 11) { d.scaleBpm(0.5) }
+            Pill("×2", Modifier.weight(1f).height(44.dp), fontSize = 11) { d.scaleBpm(2.0) }
         }
-        Spacer(Modifier.height(4.dp))
+        val tap = d.ui.tapInfo
+        if (tap.isNotEmpty()) Text(tap, color = C.green, fontSize = 10.sp, maxLines = 1)
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("1 ◀", Modifier.weight(1f), fontSize = 11) { d.shiftDownbeat(-1) }
+            Pill("1", Modifier.weight(1.2f), on = true, color = C.yellow, fontSize = 13, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
+            Pill("▶ 1", Modifier.weight(1f), fontSize = 11) { d.shiftDownbeat(1) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("◀ 10ms", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(-10.0) }
+            Pill("10ms ▶", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(10.0) }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Pill("AFINAR", Modifier.weight(1f), fontSize = 10) { d.refineBpm() }
+            Pill("ANÁLISE", Modifier.weight(1f), fontSize = 10) { d.restoreGrid(ctx) }
+        }
+        Text("1: toque = batida mais próxima · segure = posição exata", color = C.dim, fontSize = 9.sp)
+
+        HorizontalLine()
+
+        // ---- stems ----
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            DKnob("VOZ", d.groupKnob[0], { d.groupKnob[0] = it }, key = key, color = col, size = 44.dp)
+            DKnob("BATERIA", d.groupKnob[1], { d.groupKnob[1] = it }, key = key, color = col, size = 44.dp)
+            DKnob("HARMONIA", d.groupKnob[2], { d.groupKnob[2] = it }, key = key, color = col, size = 44.dp)
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Pill("VOZ", Modifier.weight(1f), on = d.groupMuted(mask, 0), color = C.red, fontSize = 10) { d.toggleGroup(0) }
             Pill("BAT", Modifier.weight(1f), on = d.groupMuted(mask, 1), color = C.red, fontSize = 10) { d.toggleGroup(1) }
@@ -307,24 +335,25 @@ private fun StemColumn(d: Deck, modifier: Modifier) {
         }
         Text("knob = gradual · botão aceso = cortado", color = C.dim, fontSize = 9.sp)
         if (ready) {
-            Text("FAIXA POR FAIXA", color = C.dim, fontSize = 9.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 6.dp))
+            Text("FAIXA POR FAIXA (role para baixo)", color = C.dim, fontSize = 9.sp, fontWeight = FontWeight.Bold)
             for (row in 0 until 3) {
-                Row(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                     for (c in 0 until 2) {
                         val k = row * 2 + c
                         DKnob(Separator.LABELS[k], d.stemKnob[k], { d.setStemKnob(k, it) }, key = key, color = col, size = 40.dp)
                     }
                 }
             }
-            Pill("ZERAR", Modifier.fillMaxWidth(), fontSize = 11) { d.resetStems(); resetKey++ }
+            Pill("ZERAR FAIXAS", Modifier.fillMaxWidth(), fontSize = 11) { d.resetStems(); resetKey++ }
         } else {
-            StemsPending(d, Modifier.weight(1f))
+            StemsPending(d, Modifier)
         }
     }
+}
+
+@Composable
+private fun HorizontalLine() {
+    Box(Modifier.fillMaxWidth().height(1.dp).background(C.line))
 }
 
 @Composable
@@ -445,7 +474,7 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
         Text("DECK ${d.index + 1}", color = C.deck(d.index), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-        Section("HOT CUES (toque longo apaga)")
+        Section("HOT CUES (segure para apagar)")
         for (r in 0 until 4) {
             Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 for (c in 0 until 2) {
@@ -466,31 +495,6 @@ private fun PadColumn(d: Deck, modifier: Modifier) {
             Pill("+4", Modifier.weight(1f), fontSize = 11) { d.beatJump(4.0) }
         }
         LoopPads(d)
-        Section("BPM")
-        Pill("TAP", Modifier.fillMaxWidth().height(52.dp), color = C.deck(d.index), fontSize = 16) { d.tap() }
-        val tap = d.ui.tapInfo
-        Text(
-            tap.ifEmpty { "Bata no ritmo (4 ou mais toques). Ao parar, o app afina o BPM exato pelo áudio." },
-            color = if (tap.isEmpty()) C.dim else C.green, fontSize = 10.sp,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Pill("÷2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(0.5) }
-            Pill("×2", Modifier.weight(1f), fontSize = 10) { d.scaleBpm(2.0) }
-            Pill("AFINAR", Modifier.weight(1.4f), fontSize = 10) { d.refineBpm() }
-        }
-        Pill("BPM DA ANÁLISE", Modifier.fillMaxWidth(), fontSize = 10) { d.restoreGrid(ctx) }
-        Pill("ANDAMENTO ORIGINAL (tira o sync)", Modifier.fillMaxWidth(), fontSize = 10) { d.resetTempo() }
-        Section("GRADE (downbeat = o 1)")
-        Pill("MARCAR 1 AQUI", Modifier.fillMaxWidth(), fontSize = 11, onLong = { d.downbeatHere(exact = true) }) { d.downbeatHere() }
-        Text("Toque: o 1 vai para a batida mais próxima. Segure: posição exata.", color = C.dim, fontSize = 9.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Pill("1 ◀ batida", Modifier.weight(1f), fontSize = 10) { d.shiftDownbeat(-1) }
-            Pill("batida ▶ 1", Modifier.weight(1f), fontSize = 10) { d.shiftDownbeat(1) }
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Pill("◀ 10 ms", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(-10.0) }
-            Pill("10 ms ▶", Modifier.weight(1f), fontSize = 10) { d.nudgeGrid(10.0) }
-        }
         Section("INÍCIO DA MÚSICA (onde ela carrega)")
         Pill("INÍCIO AQUI", Modifier.fillMaxWidth(), fontSize = 11) { d.setCue() }
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
