@@ -26,6 +26,9 @@ class Track(val id: String, var path: String) {
     var cue = -1.0
     var key = -1
     var keyFromStems = false
+    /** Tom corrigido à mão: a análise não sobrescreve mais. [keyAuto] guarda o que o app detectou. */
+    var keyManual = false
+    var keyAuto = -1
     var gain = 1f
     var hotcues = DoubleArray(8) { -1.0 }
     var plays = 0
@@ -44,7 +47,7 @@ class Track(val id: String, var path: String) {
         put("dur", durationMs); put("size", size); put("added", addedAt)
         put("an", analyzed); put("st", stems)
         put("bpm", fin(bpm)); put("anchor", fin(anchor)); put("am", anchorManual); put("bpmA", fin(bpmAuto)); put("ancA", fin(anchorAuto)); put("acue", fin(autoCue)); put("cue", fin(cue))
-        put("key", key); put("kst", keyFromStems); put("gain", fin(gain.toDouble()))
+        put("key", key); put("kst", keyFromStems); put("km", keyManual); put("ka", keyAuto); put("gain", fin(gain.toDouble()))
         put("hot", JSONArray().apply { hotcues.forEach { put(fin(it)) } })
         put("plays", plays); put("last", lastPlayed)
         error?.let { put("err", it) }
@@ -73,6 +76,8 @@ class Track(val id: String, var path: String) {
             cue = o.optDouble("cue", -1.0)
             key = o.optInt("key", -1)
             keyFromStems = o.optBoolean("kst")
+            keyManual = o.optBoolean("km")
+            keyAuto = o.optInt("ka", if (keyManual) -1 else key)
             gain = o.optDouble("gain", 1.0).toFloat()
             o.optJSONArray("hot")?.let { a ->
                 for (i in 0 until minOf(8, a.length())) hotcues[i] = a.optDouble(i, -1.0)

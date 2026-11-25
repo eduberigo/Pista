@@ -308,6 +308,13 @@ class Deck(val index: Int) {
         return true
     }
 
+    /** Corrige o tom da música (k = 0..23); -1 volta ao tom detectado pelo app. */
+    fun setKey(k: Int) {
+        val t = track ?: return
+        Keys.setTrackKey(t, k)
+        saveEdit()
+    }
+
     fun resetCue() {
         val t = track ?: return
         t.cue = -1.0

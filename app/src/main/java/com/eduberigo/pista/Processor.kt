@@ -171,7 +171,7 @@ object Processor {
                 )
                 t.stems = true
                 val k = chroma.key()
-                if (k >= 0) { t.key = k; t.keyFromStems = true }
+                if (k >= 0) { t.keyAuto = k; t.keyFromStems = true; if (!t.keyManual) t.key = k }
                 t.error = null
                 Pista.library.save()
                 Pista.library.bump()

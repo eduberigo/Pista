@@ -72,6 +72,7 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
     var target by remember { mutableIntStateOf(deck) }
     var menu by remember { mutableStateOf<Track?>(null) }
     var confirm by remember { mutableStateOf<Track?>(null) }
+    var keyFor by remember { mutableStateOf<Track?>(null) }
     // modo COMBINAR
     var match by remember { mutableStateOf(p.getBoolean("match", false)) }
     var refSrc by remember { mutableIntStateOf(1 - deck) } // 0/1 = deck, 2 = música escolhida
@@ -297,6 +298,7 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
                     Pill("Usar como referência para combinar", Modifier.fillMaxWidth()) {
                         menu = null; refTrack = t; refSrc = 2; match = true; p.edit().putBoolean("match", true).apply()
                     }
+                    Pill("Corrigir tom (${Keys.name(t.key).ifEmpty { "?" }})", Modifier.fillMaxWidth()) { menu = null; keyFor = t }
                     if (!t.stems) Pill("Separar faixas agora", Modifier.fillMaxWidth()) { menu = null; Processor.request(ctx, t) }
                     Pill("Refazer análise (BPM, tom, grade)", Modifier.fillMaxWidth()) {
                         menu = null
@@ -309,6 +311,10 @@ fun LibraryScreen(deck: Int, onClose: () -> Unit, onSettings: () -> Unit) {
             },
             confirmButton = { TextButton(onClick = { menu = null }) { Text("Fechar") } },
         )
+    }
+
+    keyFor?.let { t ->
+        KeyPicker(t, { k -> Keys.setTrackKey(t, k); keyFor = null }, { keyFor = null })
     }
 
     confirm?.let { t ->

@@ -47,6 +47,20 @@ object Keys {
         return best
     }
 
+    /** Correção manual do tom; -1 = volta ao detectado. */
+    fun setTrackKey(t: Track, k: Int) {
+        if (k < 0) {
+            t.keyManual = false
+            t.key = t.keyAuto
+        } else {
+            if (!t.keyManual) t.keyAuto = t.key
+            t.keyManual = true
+            t.key = k
+        }
+        Pista.library.save()
+        Pista.library.bump()
+    }
+
     /** Cor para a roda Camelot (1..12). */
     fun color(k: Int): Long {
         if (k < 0) return 0xFF555555

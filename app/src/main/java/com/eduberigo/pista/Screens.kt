@@ -319,6 +319,15 @@ private fun StemColumn(d: Deck, modifier: Modifier) {
             Pill("ANÁLISE", Modifier.weight(1f), fontSize = 10) { d.restoreGrid(ctx) }
         }
         Text("1: toque = batida mais próxima · segure = posição exata", color = C.dim, fontSize = 9.sp)
+        val tk = d.ui.track
+        var picking by remember { mutableStateOf(false) }
+        if (tk != null) {
+            Pill(
+                "TOM: " + (if (tk.key >= 0) "${Keys.name(tk.key)} ${Keys.camelot(tk.key)}" else "?") + if (tk.keyManual) " ✎" else "  · corrigir",
+                Modifier.fillMaxWidth(), fontSize = 11,
+            ) { picking = true }
+            if (picking) KeyPicker(tk, { d.setKey(it); picking = false }, { picking = false })
+        }
 
         HorizontalLine()
 
@@ -602,6 +611,7 @@ private fun TempoPanel(d: Deck, onClose: () -> Unit) {
     var range by remember { mutableFloatStateOf(d.range.toFloat()) }
     var keylock by remember { mutableStateOf(d.keylock) }
     var shift by remember { mutableIntStateOf(d.keyShift) }
+    var picking by remember { mutableStateOf(false) }
     Box(
         Modifier.fillMaxSize().background(Color(0xAA000000)).pointerInput(Unit) { detectTapGestures { onClose() } },
         contentAlignment = Alignment.BottomCenter,
@@ -656,6 +666,10 @@ private fun TempoPanel(d: Deck, onClose: () -> Unit) {
                     if (s != null) { shift = s; d.keyShift = s }
                 }
             }
+            d.track?.let { tk ->
+                Pill("O TOM DETECTADO ESTÁ ERRADO? CORRIGIR", Modifier.fillMaxWidth(), fontSize = 11) { picking = true }
+                if (picking) KeyPicker(tk, { d.setKey(it); picking = false }, { picking = false })
+            }
             Text("BPM E GRADE", color = C.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Pill("TAP", Modifier.weight(1.4f).height(48.dp), color = C.deck(d.index), fontSize = 15) { d.tap() }
@@ -690,4 +704,40 @@ private fun TempoLive(d: Deck) {
             color = Color(Keys.color(k)), fontSize = 13.sp,
         )
     }
+}
+
+/** Seletor para corrigir o tom: 12 maiores e 12 menores, com o número Camelot. */
+@Composable
+fun KeyPicker(t: Track, onPick: (Int) -> Unit, onClose: () -> Unit) {
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onClose,
+        title = { Text("Tom de ${t.name}", maxLines = 2) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    "Atual: ${Keys.name(t.key)} (${Keys.camelot(t.key)})" +
+                        if (t.keyManual) " · corrigido à mão; o app tinha detectado ${Keys.name(t.keyAuto).ifEmpty { "—" }}" else " · detectado pelo app",
+                    color = C.dim, fontSize = 12.sp,
+                )
+                for ((title, base) in listOf("MAIOR" to 0, "MENOR" to 12)) {
+                    Text(title, color = C.dim, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    for (row in 0 until 3) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            for (c in 0 until 4) {
+                                // ordem do ciclo de quintas, como na roda Camelot
+                                val pc = (listOf(0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5)[row * 4 + c] + if (base == 12) 9 else 0) % 12
+                                val k = base + pc
+                                Pill(
+                                    "${Keys.name(k)} ${Keys.camelot(k)}", Modifier.weight(1f),
+                                    on = t.key == k, color = Color(Keys.color(k)), fontSize = 10,
+                                ) { onPick(k) }
+                            }
+                        }
+                    }
+                }
+                if (t.keyManual) Pill("VOLTAR AO TOM DETECTADO", Modifier.fillMaxWidth(), fontSize = 11) { onPick(-1) }
+            }
+        },
+        confirmButton = { androidx.compose.material3.TextButton(onClick = onClose) { Text("Fechar") } },
+    )
 }

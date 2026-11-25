@@ -69,7 +69,10 @@ object Work {
         t.bpm = a.bpm
         if (hint <= 0) { t.bpmAuto = a.bpm; t.anchorAuto = a.anchor }
         t.autoCue = a.autoCue
-        if (!t.keyFromStems) t.key = a.key
+        if (!t.keyFromStems) {
+            t.keyAuto = a.key
+            if (!t.keyManual) t.key = a.key
+        }
         t.gain = a.gain
         if (t.durationMs <= 0) t.durationMs = frames * 1000L / SR
         t.analyzed = true
