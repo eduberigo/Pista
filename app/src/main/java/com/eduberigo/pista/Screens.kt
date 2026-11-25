@@ -105,7 +105,7 @@ private fun DeckHeader(d: Deck, left: Boolean, modifier: Modifier, onOpen: () ->
             if (!left) Cover(d.ui.cover, d.index)
         }
         HeaderStatus(d)
-        Overview(d, Modifier.fillMaxWidth().height(30.dp).padding(top = 4.dp))
+        Overview(d, Modifier.padding(top = 4.dp).fillMaxWidth().height(36.dp))
     }
 }
 

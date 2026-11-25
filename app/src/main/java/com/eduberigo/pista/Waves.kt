@@ -1,6 +1,8 @@
 package com.eduberigo.pista
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
@@ -34,9 +36,24 @@ fun Overview(d: Deck, modifier: Modifier = Modifier) {
     val edits = d.ui.edits
     Canvas(
         modifier.pointerInput(d) {
-            detectTapGestures { o ->
-                val l = d.loaded ?: return@detectTapGestures
-                d.seek((o.x / size.width * l.frames).toDouble())
+            // pula já no toque (sem esperar soltar) e acompanha o dedo se arrastar;
+            // tocar na faixa mais à esquerda vai exatamente para o começo
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                fun go(x: Float) {
+                    val l = d.loaded ?: return
+                    val f = (x / size.width).coerceIn(0f, 1f)
+                    d.seek(if (f < 0.03f) 0.0 else (f * l.frames).toDouble())
+                }
+                go(down.position.x)
+                down.consume()
+                while (true) {
+                    val ev = awaitPointerEvent()
+                    val c = ev.changes.firstOrNull { it.id == down.id } ?: break
+                    if (!c.pressed) break
+                    if (c.position.x != c.previousPosition.x) go(c.position.x)
+                    c.consume()
+                }
             }
         },
     ) {
